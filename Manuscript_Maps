@@ -44,3 +44,8 @@ ggplot() +
        x = "Longitude",
        y = "Latitude") +
   theme_minimal()
+MaineDMR_Trawl_Survey23_Tow_Data<- read.csv("MaineDMR_Trawl_Survey23_Tow_Data.csv")
+my_data$Longitude <- as.numeric(my_data$Longitude)
+my_data$Latitude <- as.numeric(my_data$Latitude)
+ggplot(data = my_data, aes(x = Longitude, y = Latitude)) +
+  geom_point()
