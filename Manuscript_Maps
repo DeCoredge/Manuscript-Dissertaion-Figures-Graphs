@@ -40,7 +40,7 @@ ggplot() +
   geom_sf(data = world, fill = "gray", color = "black") + # Add coastline
   geom_contour(data = gom_bathy_df, aes(x = x, y = y, z = z), breaks = c(0, -100, -200), color = "darkgray", linetype = "dashed") + # Add bathymetric contours
   coord_sf(xlim = c(lon1, lon2), ylim = c(lat1, lat2), expand = FALSE) +
-  labs(title = "Map of ME-NH Inshore Trawl Survey of the Gulf of Maine",
+  labs(title = "Map of 2023 ME-NH Inshore Trawl Survey of the Gulf of Maine",
        x = "Longitude",
        y = "Latitude") +
   theme_minimal()
