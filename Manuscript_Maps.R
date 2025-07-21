@@ -46,7 +46,7 @@ ggplot() +
   theme_minimal()
 
 #Use csv file to upload coordinates of sampling locations from trawls
-MaineDMR_Trawl_Survey23_Tow_Data<- read.csv("MaineDMR_Trawl_Survey23_Tow_Data.csv")
+Maine_DMR_ALL_Trawl_Catch_Data.csv<- read.csv("Maine_DMR_ALL_Trawl_Catch_Data.csv")
 my_data$Longitude <- as.numeric(my_data$Longitude)
 my_data$Latitude <- as.numeric(my_data$Latitude)
 
