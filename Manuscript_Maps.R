@@ -32,7 +32,7 @@ gom_bathy_df <- fortify(gom_bathy)
 world <- ne_countries(scale = "medium", returnclass = "sf")
 
 #Plot the map
-ggplot() +
+base_map <- ggplot() +
   geom_raster(data = gom_bathy_df, aes(x = x, y = y, fill = z)) +
   scale_fill_gradientn(colors = c("darkblue", "lightblue", "lightgreen", "darkgreen"),
                        values = scales::rescale(c(min(gom_bathy_df$z), 0, max(gom_bathy_df$z))),
@@ -44,12 +44,18 @@ ggplot() +
        x = "Longitude",
        y = "Latitude") +
   theme_minimal()
+base_map # check to make sure that the base map looks alright
 
 #Use csv file to upload coordinates of sampling locations from trawls
-Maine_DMR_ALL_Trawl_Catch_Data.csv<- read.csv("Maine_DMR_ALL_Trawl_Catch_Data.csv")
-my_data$Longitude <- as.numeric(my_data$Longitude)
-my_data$Latitude <- as.numeric(my_data$Latitude)
+trawl_data <- read.csv("Maine_DMR_ALL_Trawl_Catch_Data.csv")
+
+# data upload check
+summary(trawl_data) # check that R read in the dataframe right
+trawl_factors <- c("Survey", "Season", "Tow_Number", "Region", "Common_Name") # the columns that R didn't read in as factors
+trawl_data[trawl_factors] <- lapply(trawl_data[trawl_factors], factor)# make these columns factors now
+summary(trawl_data) # check that R read in the dataframe right
+
 
 #Plot the points on the map
-ggplot(data = my_data, aes(x = Longitude, y = Latitude)) +
-  geom_point()
+base_map + 
+  geom_point(data = trawl_data, aes(x = Start_Longitude, y = Start_Latitude))
