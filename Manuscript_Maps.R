@@ -55,7 +55,27 @@ trawl_factors <- c("Survey", "Season", "Tow_Number", "Region", "Common_Name") # 
 trawl_data[trawl_factors] <- lapply(trawl_data[trawl_factors], factor)# make these columns factors now
 summary(trawl_data) # check that R read in the dataframe right
 
-
+# Create a data frame for coordinates.
+trawl_df <- data.frame(id = 1:11, 
+                   Start_Latitude = c(43.461, 43.454, 43.488, 44.321, 44.486,
+                                       43.487, 43.461, 43.455, 44.220, 44.421,
+                                       44.483),
+                   Start_Longitude = c(-69.836, -69.898, -69.924, -67.559,
+                                        -67.506, -69.925, -69.837, -69.897,
+                                        -67.743, -67.445, -67.508),
+                   End_Latitutde = c(43.450, 43.444, 43.477, 44.312, 44.473,
+                                      43.477, 43.449, 43.444, 44.233, 44.412,
+                                      44.470),
+                   End_Longitude = c(-69.848, -69.912, -69.937, -67.573,
+                                      -67.513, -69.938, -69.848, -69.910,
+                                      -67.737, -67.460, -67.516))
 #Plot the points on the map
 base_map + 
-  geom_point(data = trawl_data, aes(x = Start_Longitude, y = Start_Latitude))
+  geom_point(data = trawl_data, aes(x = Start_Longitude, y = Start_Latitude)),
+             color = "purple", alpha = 0.6, size = 3) +
+  geom_segment(data = trawl_df,
+               aes(x = Start_Longitude, y = Start_Latitude, 
+                   xend = End_Longitude, yend = End_Latitude),
+               color = "black", linewidth = 2, alpha = 0.6)
+
+
