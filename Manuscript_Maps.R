@@ -68,12 +68,18 @@ trawl_df <- data.frame(id = 1:11,
                                       44.470),
                    End_Longitude = c(-69.848, -69.912, -69.937, -67.573,
                                       -67.513, -69.938, -69.848, -69.910,
-                                      -67.737, -67.460, -67.516))
-#Plot the points on the map
-base_map + 
-  geom_point(data = trawl_data, aes(x = Start_Longitude, y = Start_Latitude), color = "purple", alpha = 0.6, size = 1) +
-  geom_point(data = trawl_data, aes(x = End_Longitude, y = End_Latitude), color = "purple", alpha = 0.6, size = 1) +
-  geom_segment(data = trawl_df, aes(x = Start_Longitude, y = Start_Latitude, xend = End_Longitude, yend = End_Latitude,
-               color = "black", linewidth = 2, alpha = 0.6))
+                                      -67.737, -67.460, -67.516)
+                       
+#Plot the points on the map w/ the scale of the map fixed to have the coordinate points more visible
 
+base_map_zoomed <- base_map +
+  geom_point(data = trawl_data, aes(x = Start_Longitude, y = Start_Latitude),
+             color = "purple", alpha = 0.6, size = 4) +
+  geom_segment(data = trawl_df,
+               aes(x = Start_Longitude, y = Start_Latitude, 
+                   xend = End_Longitude, yend = End_Latitude),
+               color = "black", linewidth = 8, alpha = 0.8) +
+  coord_sf(xlim = c(-70, -65), ylim = c(42, 45))
 
+#View New zoomed in Map
+print(base_map_zoomed)
