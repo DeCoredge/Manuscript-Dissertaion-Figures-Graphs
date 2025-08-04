@@ -1,5 +1,8 @@
 #Map making for Manuscript & Dissertation
 
+#Clear current working environment
+rm(list = ls())
+
 #Install Packages needed to make U.S. State Maps & Oceans
 install.packages(c("sf", "ggplot2", "usmap"))
 install.packages("rnaturalearth")
@@ -40,7 +43,7 @@ base_map <- ggplot() +
   geom_sf(data = world, fill = "gray", color = "black") + # Add coastline
   geom_contour(data = gom_bathy_df, aes(x = x, y = y, z = z), breaks = c(0, -100, -200), color = "darkgray", linetype = "dashed") + # Add bathymetric contours
   coord_sf(xlim = c(lon1, lon2), ylim = c(lat1, lat2), expand = FALSE) +
-  labs(title = "Figure 1",
+  labs(title = "2023 ME-NH Sampled Inshore Trawls",
        x = "Longitude",
        y = "Latitude") +
   theme_minimal()
