@@ -1,78 +1,19 @@
-setwd('C:/Users/DeCorey Bolton Jr/Desktop/Figures_Graphs')
-data <- data.frame(Category = c("Hake Silver", "Hake Silver", "Hake Silver", 
-                                "Hake Silver","Hake Red", "Hake Red", "Hake Red",
-                                "Hake Red", "Flounder Winter", "Flounder Witch",
-                                "Flounder Winter", "Flounder Winter",
-                                "Redfish Acadian Perch", "Redfish Acadian Perch",
-                                "Redfish Acadian Perch", "Redfish Acadian Perch",
-                                "Plaice American", "Plaice American",
-                                "Plaice American", "Plaice American",
-                                "Butterfish", "Butterfish", "Butterfish",
-                                "Butterfish", "Hake White", "Hake White",
-                                "Hake White", "Hake White", "Alewife", "Alewife",
-                                "Alewife", "Alewife", "Haddock", "Haddock",
-                                "Haddock", "Haddock", "Sculpin Longhorn",
-                                "Sculpin Longhorn", "Sculpin Longhorn",
-                                "Sculpin Longhorn", "Dogfish Spiny",
-                                "Dogfish Spiny", "Dogfish Spiny",
-                                "Dogfish Spiny", "Fourbeard Rockling",
-                                "Fourbeard Rockling", "Fourbeard Rockling",
-                                "Fourbeard Rockling", "Monkfish", "Monkfish",
-                                "Monkfish", "Monkfish", "Herring Blueback",
-                                "Herring Blueback", "Herring Blueback",
-                                "Herring Blueback", "Shad American",
-                                "Shad American", "Shad American",
-                                "Shad American", "Flounder Yellowtail",
-                                "Flounder Yellowtail", "Flounder Yellowtail",
-                                "Flounder Yellowtail", "Herring Atlantic",
-                                "Herring Atlantic", "Herring Atlantic",
-                                "Herring Atlantic", "Skate Thorny",
-                                "Skate Thorny", "Skate Thorny", "Skate Thorny",
-                                "Cod Atlantic", "Cod Atlantic", "Cod Atlantic",
-                                "Cod Atlantic", "Skate Little", "Skate Little",
-                                "Skate Little", "Skate Little", "Lumpfish",
-                                "Lumpfish", "Lumpfish", "Lumpfish",
-                                "Flounder Fourspot", "Flounder Fourspot",
-                                "Flounder Fourspot", "Flounder Fourspot",
-                                "Halibut Atlantic", "Halibut Atlantic",
-                                "Halibut Atlantic", "Halibut Atlantic",
-                                "Skate Barndoor", "Skate Barndoor",
-                                "Skate Barndoor", "Skate Barndoor", "Sea Raven",
-                                "Sea Raven", "Sea Raven", "Sea Raven",
-                                "Pollock", "Pollock", "Pollock", "Pollock",
-                                "Alligatorfish", "Alligatorfish",
-                                "Alligatorfish", "Alligatorfish", "Wrymouth",
-                                "Wrymouth", "Wrymouth", "Wrymouth",
-                                "Flounder Windowpane", "Flounder Windowpane",
-                                "Flounder Windowpane", "Flounder Windowpane"))
-                   Subcategory = c("X", "Y", "Y", "Y", "X", "Y", "Y", "Y",
-                                   "X", "Y", "Y", "Y", "X", "Y", "Y", "Y", 
-                                   "X", "Y", "Y", "Y", "X", "Y", "Y", "Y", 
-                                   "X", "Y", "Y", "Y", "X", "Y", "Y", "Y", 
-                                   "X", "Y", "Y", "Y", "X", "Y", "Y", "Y", 
-                                   "X", "Y", "Y", "Y", "X", "Y", "Y", "Y", 
-                                   "X", "Y", "Y", "Y", "X", "Y", "Y", "Y", 
-                                   "X", "Y", "Y", "Y", "X", "Y", "Y", "Y", 
-                                   "X", "Y", "Y", "Y", "X", "Y", "Y", "Y", 
-                                   "X", "Y", "Y", "Y", "X", "Y", "Y", "Y", 
-                                   "X", "Y", "Y", "Y", "X", "Y", "Y", "Y", 
-                                   "X", "Y", "Y", "Y", "X", "Y", "Y", "Y", 
-                                   "X", "Y", "Y", "Y", "X", "Y", "Y", "Y", 
-                                   "X", "Y", "Y", "Y", "X", "Y", "Y", "Y", 
-                                   "X", "Y", "Y", "Y", "X", "Y", "Y", "Y")
-                   Value = c(0.67, 0.55, 0.53, 0.05, 0.16, 0.25, 0.02, 0.03,
-                             0.01, 0.015, 0.02, 0.01, 0.015, 0.011, 0, 0.015,
-                             0.03, 0.01, 0.012, 0.012, 0, 0.011, 0.04, 0.05,
-                             0.011, 0.03, 0, 0.011, 0.015, 0.013, 0.011, 0.011,
-                             0, 0.011, 0.011, 0.08, 0.001, 0, 0, 0.001, 0.002,
-                             0.004, 0.001, 0.001, 0.001, 0.001, 0.01, 0.001, 0,
-                             0, 0, 0, 0.001, 0, 0, 0, 0.01, 0.001, 0.001, 0.001,
-                             0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0, 0, 0,
-                             0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001,
-                             0.001, 0.001, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-                 ggplot(data, aes(x = Category, y = Value, fill = Subcategory))
-                 + geom_bar(stat = "identity", position = "dodge") +
-                     labs(title = "Primer Detection of Gulf of Maine Fish",
-                          x = "Fish Species",
-                          y = "Proportion Abundance/ Reads",
-                          fill = "Subcategory")
+rm(list = ls())
+
+library(ggplot2)
+library(tidyr)
+
+# with all the read Upload csv dta file for species abundance/read count proportions
+fish_data<- read.csv("Fish_abundance_read_counts.csv")
+
+#Add Primer/Trawl column to graph
+fish_data<- pivot_longer(fish_data, cols = c("Abundance", "MiFish", "Leray"), 
+                         names_to = "Trawl_Proportion_Primers", 
+                         values_to = "Proportion_Abundance_Reads")
+#Create Bar chart of abundance/read count proportions
+fish_barchart<- ggplot()
+fish_barchart<-fish_barchart + geom_col(data = fish_data, aes(x = Species,
+                                y = Proportion_Abundance_Reads, 
+                                fill = Trawl_Proportion_Primers), 
+                                position= "dodge")
+fish_barchart
