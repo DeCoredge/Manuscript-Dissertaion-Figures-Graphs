@@ -5,6 +5,9 @@ library(tidyr)
 
 # with all the read Upload csv dta file for fish species abundance/read count proportions
 fish_data<- read.csv("Fish_abundance_read_counts.csv")
+fish_data$Species <- as.factor(fish_data$Species)
+fish_data$Species <- factor(fish_data$Species, levels=fish_data$Species[order(-fish_data$Abundance)], ordered=TRUE)
+
 
 #Add Primer/Trawl column to graph
 fish_data<- pivot_longer(fish_data, cols = c("Abundance", "MiFish", "Leray"), 
@@ -12,10 +15,13 @@ fish_data<- pivot_longer(fish_data, cols = c("Abundance", "MiFish", "Leray"),
                          values_to = "Proportion_Abundance_Reads")
 #Create Bar chart of abundance/read count proportions
 fish_barchart<- ggplot()
-fish_barchart<-fish_barchart + geom_col(data = fish_data, aes(x = Species,
+fish_barchart<-fish_barchart + 
+  geom_col(data = fish_data, aes(x = Species,
                                 y = Proportion_Abundance_Reads, 
                                 fill = Trawl_Proportion_Primers), 
-                                position= "dodge")
+                                position= "dodge") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
 fish_barchart
 
 #Upload cephalopod csv data file for cephalopod species abundance/read count proportions
