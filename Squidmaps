@@ -1,0 +1,26 @@
+rm(list = ls())
+
+install.packages("marmap")
+library(marmap)
+
+#Coordinates for Gulf of Maine (GOM) & Mid-Atlantic Bight (MAB)
+lon_min <- -77 #Western edge (Cape Hatteras)
+lon_max <- -65 #Eastern edge (Newfoundland)
+lat_min <- -34 #Southern edge (N. Carolina)
+lat_max <- 46 #Northern edge (Maine/Canada)
+
+#Download bathymetry data
+bathy_data <- getNOAA.bathy(lon1 = lon_min, lon2 = lon_max, lat1 = lat_min, lat2 = lat_max, resolution = 10)
+
+#Plot map
+plot(bathy_data, main = "Gulf of Maine & Mid-Atlantic Bight", xlab = "Longitude", ylab = "Latitude",
+     col = c("lightblue", "darkblue"), dso = 10) #Land/water colors & depth contours
+
+#Add coastline
+add_coast(bathy_data, col = "tan", lwd = 1.5) # Coastline color & line width
+
+#Add isobaths
+add_isobath(bathy_data, n = c(100, 200, 1000), col = "gray40", lwd = 1) #depth in meters, isobath color, & line width
+
+#Add Shelf break at 200m
+add_isobath(bathy_data, n = 200, col = "purple", lwd = 2)
