@@ -17,9 +17,10 @@ bathy_data <- getNOAA.bathy(lon1 = lon_min, lon2 = lon_max, lat1 = lat_min, lat2
 # Create nice looking color palette
 blues <- c("lightsteelblue4", "lightsteelblue3", "lightsteelblue2", "lightblue1")
 greys <- c(grey(0.6), grey(0.93), grey(0.99))
+tans <- c("khaki")
 
 # plot map with geographic features (shelf, isobaths, coastline, etc.)
-plot(bathy_data, image = TRUE, land = TRUE, lwd = 0.1, bpal = list(c(0, max(bathy_data), greys), c(min(bathy_data), 0, blues)), main = "Gulf of Maine & Mid-Atlantic Bight")
+plot(bathy_data, image = TRUE, land = TRUE, lwd = 0.1, bpal = list(c(0, max(bathy_data), tans), c(min(bathy_data), 0, blues)), main = "Gulf of Maine & Mid-Atlantic Bight")
 
 plot(bathy_data, lwd = 0.8, deep = 0, shallow = 0, step = 0, add = TRUE) # highlight coastline
 
