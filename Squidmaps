@@ -23,7 +23,7 @@ plot(bathy_data, image = TRUE, land = TRUE, lwd = 0.1, bpal = list(c(0, max(bath
 
 plot(bathy_data, lwd = 0.8, deep = 0, shallow = 0, step = 0, add = TRUE) # highlight coastline
 
-plot(bathy_data, lwd = 1.0, deep = -200, shallow = -200, step = 0, col="purple", add = TRUE)
+plot(bathy_data, lwd = 2.5, deep = -200, shallow = -200, step = 0, col="purple", add = TRUE)
 
 #Create a Legend for water depth
 colorlegend(zlim=c(min(bathy_data),0), col=blues, main="depth (m)", posx=c(0.82,0.84), posy=c(0.1,0.92))
