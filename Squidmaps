@@ -14,29 +14,16 @@ lat_max <- 46 #Northern edge (Maine/Canada)
 #Download bathymetry data
 bathy_data <- getNOAA.bathy(lon1 = lon_min, lon2 = lon_max, lat1 = lat_min, lat2 = lat_max, resolution = 10)
 
-#Plot map
-#Land/water colors & depth contours
-plot(bathy_data, image = TRUE, land = TRUE, bpal = list(c(0, 0, "tan"), c(min(bathy_data), 0, "blue")), main = "Gulf of Maine & Mid-Atlantic Bight", xlab = "Longitude", ylab = "Latitude",
-     col = c("lightblue", "darkblue"))
-
-#Add coastline
-plot(bathy_data, n = 1, lwd = 1.5, add = TRUE, col = "black") # Coastline color & line width
-
-#Add isobaths
-plot.bathy(bathy_data, n = c(100, 200, 1000), add = TRUE, col = "gray40", lwd = 1) #depth in meters, isobath color, & line width
-
-#Add Shelf break at 200m
-plot.bathy(bathy_data, n = 200, col = "purple", lwd = 2)
-
 # Create nice looking color palette
-blues <- c("lightsteelblue4", "lightsteelblue3", "lightsteelblue2", "lightsteelblue1")
+blues <- c("lightsteelblue4", "lightsteelblue3", "lightsteelblue2", "lightblue1")
 greys <- c(grey(0.6), grey(0.93), grey(0.99))
 
-# plot with these palettes, etc.
-plot(bathy_data, image = TRUE, land = TRUE, lwd = 0.1, bpal = list(c(0, max(bathy_data), greys), c(min(bathy_data), 0, blues)))
+# plot map with geographic features (shelf, isobaths, coastline, etc.)
+plot(bathy_data, image = TRUE, land = TRUE, lwd = 0.1, bpal = list(c(0, max(bathy_data), greys), c(min(bathy_data), 0, blues)), main = "Gulf of Maine & Mid-Atlantic Bight")
 
 plot(bathy_data, lwd = 0.8, deep = 0, shallow = 0, step = 0, add = TRUE) # highlight coastline
 
 plot(bathy_data, lwd = 1.0, deep = -200, shallow = -200, step = 0, col="purple", add = TRUE)
 
-colorlegend(zlim=c(min(bathy_data),0), col=blues, main="depth (m)", posx=c(0.8,0.84), posy=c(0.1,0.4))
+#Create a Legend for water depth
+colorlegend(zlim=c(min(bathy_data),0), col=blues, main="depth (m)", posx=c(0.82,0.84), posy=c(0.1,0.92))
