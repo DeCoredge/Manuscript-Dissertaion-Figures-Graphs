@@ -51,7 +51,7 @@ base_map <- ggplot() +
 base_map # check to make sure that the base map looks alright
 
 #Use csv file to upload coordinates of sampling locations from trawls
-trawl_data <- read.csv("Maine_DMR_ALL_Trawl_Catch_Data.csv")
+trawl_data <- read.csv("Maine_DMR_Trawl_Catch_Data.csv")
 
 # data upload check
 summary(trawl_data) # check that R read in the dataframe right
