@@ -165,6 +165,7 @@ edna_data<- replace(edna_data, is.na(edna_data), "")
 #Fix any dataframe formating issues
 edna_data$Metaprobes <- as.factor(edna_data$Metaprobes)
 edna_data$Location <- as.factor(edna_data$Location)
+edna_data$Quantity   <- as.numeric(edna_data$Quantity)
 
 #Fit data into Poisson Regression GLMs.
 edna_Metaprobe_model <- glm(Quantity ~ 1, data= edna_data, family = "poisson")
@@ -175,11 +176,13 @@ edna_Metaprobe_model_02 <- glm(Quantity ~ Location, data= edna_data,
 summary(edna_Metaprobe_model)
 summary(edna_Metaprobe_model_02)
 
-# Add the model prediction to the plot
-plot(edna_data$Quantity ~ edna_data$Location)
-abline(edna_MiFish_model, col="green", lwd=2)
-abline(edna_MiFish_model_02, col="purple", lwd=2)
+#'Location' is a factor (categorical), a boxplot is more appropriate than a scatter plot.Using a lighter color so points show up, Darker border for contrast, and have outline FALSE to Hide default outliers so they aren't doubled
 
-# Add the model prediction to the plot
-plot(log10(edna_data$Location) ~ log10(edna_data$Quantity))
-abline(a=0, b=1) # one to one line
+plot(Quantity ~ Location, data = edna_data, 
+     main = "eDNA Quantity by Location", ylab = "Abundance", xlab = "Location",
+     col = "green", border = "purple", outline = FALSE)
+
+#Abline doesn't work directly with GLMs like this because GLMs are non-linear.
+# To see if Location is significant:
+
+anova(edna_Metaprobe_model, edna_Metaprobe_model_02, test = "Chisq")
