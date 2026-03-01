@@ -152,3 +152,34 @@ abline(edna_Ceph18s_model_02, col="purple", lwd=2)
 # Add the model prediction to the plot
 plot(log10(edna_data_03$Ceph18s) ~ log10(edna_data_03$Abundance))
 abline(a=0, b=1) # one to one line
+
+#Perform a Poisson Regression GLM using the abundance of eDNA collected from different located metaprobes to their in csv.
+edna_data<- read.csv("Metaprobe_eDNA_Location.csv", header = TRUE)
+edna_data$Metaprobes <- edna_data$Metaprobes
+edna_data$Location <- edna_data$Location 
+edna_data$Quantity <- edna_data$Quantity
+
+#Replace N/A in csv dataset table.
+edna_data<- replace(edna_data, is.na(edna_data), "")
+
+#Fix any dataframe formating issues
+edna_data$Metaprobes <- as.factor(edna_data$Metaprobes)
+edna_data$Location <- as.factor(edna_data$Location)
+
+#Fit data into Poisson Regression GLMs.
+edna_Metaprobe_model <- glm(Quantity ~ 1, data= edna_data, family = "poisson")
+edna_Metaprobe_model_02 <- glm(Quantity ~ Location, data= edna_data,
+                            family = "poisson")
+
+#View GLMs & Explore model fits and independent variables signifance
+summary(edna_Metaprobe_model)
+summary(edna_Metaprobe_model_02)
+
+# Add the model prediction to the plot
+plot(edna_data$Quantity ~ edna_data$Location)
+abline(edna_MiFish_model, col="green", lwd=2)
+abline(edna_MiFish_model_02, col="purple", lwd=2)
+
+# Add the model prediction to the plot
+plot(log10(edna_data$Location) ~ log10(edna_data$Quantity))
+abline(a=0, b=1) # one to one line
