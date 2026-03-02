@@ -1,4 +1,5 @@
 rm(list = ls())
+setwd("C:/Users/DeCorey Bolton Jr/Documents/GitHub/Manuscript-Dissertaion-Figures-Graphs")
 
 #Perform a Poisson Regression GLM using the abundance proportion of Fish species to their read counts in csv.
 edna_data<- read.csv("MiFish_Abundance_Poisson.csv", header = TRUE)
@@ -22,12 +23,14 @@ summary(edna_MiFish_model)
 summary(edna_MiFish_model_02)
 
 # Add the model prediction to the plot
-plot(edna_data$MiFish ~ edna_data$Abundance)
+plot(edna_data$MiFish ~ edna_data$Abundance, xlab = "Total Abundance",
+     ylab = "MiFish Read Count")
 abline(edna_MiFish_model, col="green", lwd=2)
 abline(edna_MiFish_model_02, col="purple", lwd=2)
 
 # Add the model prediction to the plot
-plot(log10(edna_data$MiFish) ~ log10(edna_data$Abundance))
+plot(log10(edna_data$MiFish) ~ log10(edna_data$Abundance),xlab = "Total Abundance",
+     ylab = "MiFish Read Count" )
 abline(a=0, b=1) # one to one line
 
 
@@ -53,12 +56,14 @@ summary(edna_Leray_model)
 summary(edna_Leray_model_02)
 
 # Add the model prediction to the plot
-plot(edna_data_02$Leray ~ edna_data_02$Abundance)
+plot(edna_data_02$Leray ~ edna_data_02$Abundance, xlab = "Total Abundance",
+     ylab = "Leray Read Count")
 abline(edna_Leray_model, col="green", lwd=2)
 abline(edna_Leray_model_02, col="purple", lwd=2)
 
 # Add the model prediction to the plot
-plot(log10(edna_data_02$Leray) ~ log10(edna_data_02$Abundance))
+plot(log10(edna_data_02$Leray) ~ log10(edna_data_02$Abundance), xlab = "Total Abundance",
+     ylab = "Leray Read Count")
 abline(a=0, b=1) # one to one line
 
 #Perform a Multiplicative factor log-Poisson Regression GLM using the abundance proportion of all Invert. species to their read counts, and to their body type in csv.
@@ -84,12 +89,14 @@ summary(edna_Leray_model)
 summary(edna_Leray_model_02)
 
 # Add the model prediction to the plot
-plot(edna_data_02$Leray ~ edna_data_02$Abundance)
+plot(edna_data_02$Leray ~ edna_data_02$Abundance, xlab = "Total Abundance",
+     ylab = "Multiplicative Leray Read Count" )
 abline(edna_Leray_model, col="green", lwd=2)
 abline(edna_Leray_model_02, col="purple", lwd=2)
 
 # Add the model prediction to the plot
-plot(log10(edna_data_02$Leray) ~ log10(edna_data_02$Abundance))
+plot(log10(edna_data_02$Leray) ~ log10(edna_data_02$Abundance), xlab = "Total Abundance",
+     ylab = "Multiplicative Leray Read Count")
 abline(a=0, b=1) # one to one line
 
 #Perform a Additive factor log-Poisson Regression GLM using the abundance proportion of all Invert. species to their read counts, and to their body type in csv.
@@ -115,12 +122,14 @@ summary(edna_Leray_model)
 summary(edna_Leray_model_02)
 
 # Add the model prediction to the plot
-plot(edna_data_02$Leray ~ edna_data_02$Abundance)
+plot(edna_data_02$Leray ~ edna_data_02$Abundance, xlab = "Total Abundance",
+     ylab = "Additive Leray Read Count")
 abline(edna_Leray_model, col="green", lwd=2)
 abline(edna_Leray_model_02, col="purple", lwd=2)
 
 # Add the model prediction to the plot
-plot(log10(edna_data_02$Leray) ~ log10(edna_data_02$Abundance))
+plot(log10(edna_data_02$Leray) ~ log10(edna_data_02$Abundance),  xlab = "Total Abundance",
+     ylab = "Additive Leray Read Count")
 abline(a=0, b=1) # one to one line
 
 
@@ -145,12 +154,14 @@ summary(edna_Ceph18s_model)
 summary(edna_Ceph18s_model_02)
 
 # Add the model prediction to the plot
-plot(edna_data_03$Ceph18s ~ edna_data_03$Abundance)
+plot(edna_data_03$Ceph18s ~ edna_data_03$Abundance, xlab = "Total Abundance",
+     ylab = "Ceph18S Read Count")
 abline(edna_Ceph18s_model, col="green", lwd=2)
 abline(edna_Ceph18s_model_02, col="purple", lwd=2)
 
 # Add the model prediction to the plot
-plot(log10(edna_data_03$Ceph18s) ~ log10(edna_data_03$Abundance))
+plot(log10(edna_data_03$Ceph18s) ~ log10(edna_data_03$Abundance), xlab = "Total Abundance",
+     ylab = "Ceph18S Read Count")
 abline(a=0, b=1) # one to one line
 
 #Perform a Poisson Regression GLM using the abundance of eDNA collected from different located metaprobes to their in csv.
