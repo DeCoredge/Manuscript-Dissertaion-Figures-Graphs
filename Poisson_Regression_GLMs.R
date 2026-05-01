@@ -1,6 +1,3 @@
-rm(list = ls())
-setwd("C:/Users/DeCorey Bolton Jr/Documents/GitHub/Manuscript-Dissertaion-Figures-Graphs")
-
 #Perform a Poisson Regression GLM using the abundance proportion of Fish species to their read counts in csv.
 edna_data<- read.csv("MiFish_Abundance_Poisson.csv", header = TRUE)
 edna_data$Abundance <- edna_data$Abundance 

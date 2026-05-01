@@ -1,0 +1,913 @@
+---
+title: "Trawl vs. eDNA Metabarcoding: Community Survey Comparison"
+author: ""
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    toc-float: true
+    code-fold: true
+    code-summary: "Show code"
+    theme: flatly
+    embed-resources: true
+    fig-width: 9
+    fig-height: 6
+execute:
+  warning: false
+  message: false
+---
+
+# Overview
+
+This report harmonizes paired trawl survey and eDNA metabarcoding datasets collected at the same stations, then tests:
+
+1. **Rank correlation** (Spearman's ρ) between trawl catch and eDNA read abundance
+2. **Relative abundance correlation** across all paired station × species observations
+3. **Differences among eDNA sample types** (e.g. filter type, replicate type) in their correlation with trawl data
+
+---
+
+# 1. Setup & Data Loading
+
+```{r setup}
+library(tidyverse)
+library(data.table)
+library(vegan)
+library(ggplot2)
+library(ggrepel)
+library(patchwork)
+library(knitr)
+library(kableExtra)
+library(broom)
+library(ggvenn)
+
+# ── USER: Update these file paths ────────────────────────────────────────────
+trawl_file      <- "inputs/trawl_taxa_subset.csv"          # Long-format trawl CSV
+edna_spp_file   <- "inputs/SPECIES_counts_Trawl_CEPH18s.csv"  # Species-collapsed table: rows = species,
+                                              #   cols = sample IDs + "Species" + "full_tax"
+edna_meta_file  <- "inputs/eDNA_Metabarcoding_Metadata_EG301-584_metadata.csv"       # Sample metadata: sample_id + sample_type + station_id
+lookup_file     <- "inputs/species_types.csv"        # Common-name ↔ binomial lookup table
+
+# ── USER: Update these column names to match your files ──────────────────────
+# Trawl columns
+trawl_station_col  <- "TowID"   # Station/site identifier
+trawl_species_col  <- "Common_Name"      # Common name column in trawl (e.g. "Atlantic Cod")
+trawl_count_col    <- "Expanded_Catch"        # Individual counts  — set to NA if column absent
+trawl_weight_col   <- "Expanded_Weight_kg"    # Biomass column     — set to NA if column absent
+                                     # Both columns are retained; correlations run for each
+
+# eDNA species table columns
+edna_species_col   <- "Species"      # Binomial species name column in the eDNA table
+edna_tax_col       <- "full_tax"     # Full taxonomy string column (kept but not required)
+
+# Lookup table columns (species_types.csv)
+lookup_common_col  <- "Common_Name"  # Common name column  → matches trawl species
+lookup_binom_col   <- "Species"      # Binomial name column → matches eDNA species
+lookup_group_col   <- "Fish_Invert"  # Taxonomic group (Fish / Invertebrate)
+lookup_type_col    <- "Body_Type"    # Body type (Slimy / Crunchy) — optional stratifier
+
+# eDNA metadata columns
+meta_sample_col    <- "ReadFile"    # Sample identifier (must match column names in edna_spp_file)
+meta_station_col   <- "TrawlID"   # Station identifier (must match trawl station IDs)
+meta_type_col      <- "Sample_type"  # Column distinguishing the 3 sample types
+# ─────────────────────────────────────────────────────────────────────────────
+```
+
+```{r load-data}
+# Load files
+trawl_raw    <- read_csv(trawl_file,     show_col_types = FALSE)
+edna_spp_raw <- read_csv(edna_spp_file,  show_col_types = FALSE)
+meta_raw     <- read_csv(edna_meta_file, show_col_types = FALSE)
+lookup_raw   <- read_csv(lookup_file,    show_col_types = FALSE)
+
+cat("Trawl rows:", nrow(trawl_raw), "\n")
+cat("eDNA species table:", nrow(edna_spp_raw), "species ×", ncol(edna_spp_raw), "columns\n")
+cat("eDNA metadata rows:", nrow(meta_raw), "\n")
+cat("Lookup table rows:", nrow(lookup_raw), "\n")
+```
+
+---
+
+# 2. Data Harmonization
+
+## 2a. Trawl Data — Clean & Summarize
+
+```{r trawl-clean}
+trawl <- trawl_raw %>%
+  rename(
+    station     = all_of(trawl_station_col),
+    common_name = all_of(trawl_species_col)
+  ) %>%
+  mutate(common_name = str_squish(common_name))
+
+# Retain both count and biomass columns where available
+has_count  <- !is.na(trawl_count_col)  && trawl_count_col  %in% names(trawl)
+has_weight <- !is.na(trawl_weight_col) && trawl_weight_col %in% names(trawl)
+
+if (!has_count && !has_weight)
+  stop("Neither count nor weight column found in trawl data.")
+
+if (has_count)  trawl <- trawl %>% rename(trawl_count  = all_of(trawl_count_col))
+if (has_weight) trawl <- trawl %>% rename(trawl_weight = all_of(trawl_weight_col))
+
+# Aggregate in case of duplicates within station × species
+trawl_agg <- trawl %>%
+  group_by(station, common_name) %>%
+  summarise(
+    across(any_of(c("trawl_count", "trawl_weight")),
+           ~ sum(.x, na.rm = TRUE)),
+    .groups = "drop"
+  )
+
+cat("Trawl stations:", n_distinct(trawl_agg$station), "\n")
+cat("Trawl species (common names):", n_distinct(trawl_agg$common_name), "\n")
+cat("Count column present:", has_count, "| Weight column present:", has_weight, "\n")
+```
+
+## 2b. eDNA Data — Pivot Species Table to Long Format
+
+Your eDNA table has species as rows and sample IDs as columns, with `Species` and `full_tax`
+as annotation columns. This chunk pivots it to long format and filters unassigned rows.
+
+```{r edna-load}
+# Identify annotation columns vs sample ID columns
+annot_cols <- c(edna_species_col, edna_tax_col)
+sample_cols <- setdiff(names(edna_spp_raw), annot_cols)
+
+edna_long <- edna_spp_raw %>%
+  # Drop rows with no species assignment
+  filter(!is.na(.data[[edna_species_col]]),
+         .data[[edna_species_col]] != "na",
+         .data[[edna_species_col]] != "") %>%
+  # Standardize species name formatting
+  mutate(species = str_to_sentence(str_squish(.data[[edna_species_col]]))) %>%
+  select(species, full_tax = all_of(edna_tax_col), all_of(sample_cols)) %>%
+  pivot_longer(
+    cols      = all_of(sample_cols),
+    names_to  = "sample_id",
+    values_to = "reads"
+  ) %>%
+  filter(reads > 0)
+
+cat("eDNA samples:", n_distinct(edna_long$sample_id), "\n")
+cat("eDNA species (assigned):", n_distinct(edna_long$species), "\n")
+cat("Non-zero read observations:", nrow(edna_long), "\n")
+```
+
+## 2c. Species Name Harmonization via Lookup Table
+
+The trawl uses common names; the eDNA table uses binomial names. The lookup table
+(`species_types.csv`) bridges them. This chunk adds the binomial key to trawl records
+and flags any common names not found in the lookup.
+
+```{r lookup-join}
+# Clean lookup table
+lookup <- lookup_raw %>%
+  rename(
+    common_name  = all_of(lookup_common_col),
+    species      = all_of(lookup_binom_col),
+    taxon_group  = all_of(lookup_group_col),
+    body_type    = all_of(lookup_type_col)
+  ) %>%
+  mutate(
+    common_name = str_squish(common_name),
+    species     = str_to_sentence(str_squish(species))
+  ) %>%
+  select(common_name, species, taxon_group, body_type)
+
+# Join binomial name onto trawl aggregated data
+trawl_agg <- trawl_agg %>%
+  left_join(lookup, by = "common_name")
+
+# Report any trawl common names missing from the lookup
+unmatched_trawl <- trawl_agg %>%
+  filter(is.na(species)) %>%
+  distinct(common_name)
+
+if (nrow(unmatched_trawl) > 0) {
+  message("⚠ These trawl common names were NOT found in the lookup table and will be excluded from correlations:")
+  print(unmatched_trawl)
+} else {
+  cat("✓ All trawl common names matched in lookup table.\n")
+}
+
+# Report eDNA binomials not in lookup (detected but no trawl equivalent expected)
+unmatched_edna <- edna_spp_raw %>%
+  pull(.data[[edna_species_col]]) %>%
+  # Exclude unassigned rows before any transformation
+  keep(~ !is.na(.x) && !tolower(str_squish(.x)) %in% c("na", "")) %>%
+  str_to_sentence() %>% str_squish() %>% unique() %>%
+  setdiff(lookup$species)
+cat("\neDNA species not in lookup table (", length(unmatched_edna), "):",
+    paste(head(unmatched_edna, 10), collapse = ", "),
+    if (length(unmatched_edna) > 10) "..." else "", "\n")
+
+# Keep only trawl records with a matched binomial
+trawl_agg <- trawl_agg %>% filter(!is.na(species))
+```
+
+## 2d. eDNA — Attach Metadata & Summarize by Station × Type
+
+```{r edna-meta}
+meta_clean <- meta_raw %>%
+  rename(
+    sample_id   = all_of(meta_sample_col),
+    station     = all_of(meta_station_col),
+    sample_type = all_of(meta_type_col)
+  )
+
+edna_full <- edna_long %>%
+  left_join(meta_clean, by = "sample_id")
+
+# Warn about any samples in eDNA table not found in metadata
+missing_meta <- setdiff(unique(edna_long$sample_id), meta_clean$sample_id)
+if (length(missing_meta) > 0)
+  warning("These sample IDs are in the eDNA table but not in metadata: ",
+          paste(missing_meta, collapse = ", "))
+
+# Summarize reads per station × sample_type × species
+edna_agg <- edna_full %>%
+  filter(!is.na(station), !is.na(sample_type)) %>%
+  group_by(station, sample_type, species) %>%
+  summarise(edna_reads = sum(reads, na.rm = TRUE), .groups = "drop")
+
+cat("eDNA sample types:", paste(sort(unique(edna_agg$sample_type)), collapse = ", "), "\n")
+cat("eDNA stations:", n_distinct(edna_agg$station), "\n")
+```
+
+## 2e. Join Trawl & eDNA
+
+```{r join}
+# Paired stations present in both datasets
+shared_stations <- intersect(unique(trawl_agg$station), unique(edna_agg$station))
+cat("Paired stations (trawl ∩ eDNA):", length(shared_stations), "\n")
+
+# Full join on binomial species name within paired stations
+paired <- trawl_agg %>%
+  filter(station %in% shared_stations) %>%
+  full_join(
+    edna_agg %>% filter(station %in% shared_stations),
+    by = c("station", "species")
+  ) %>%
+  # Fill zeros for species absent from one method at a given station
+  mutate(
+    across(any_of(c("trawl_count", "trawl_weight")), ~ replace_na(.x, 0)),
+    edna_reads = replace_na(edna_reads, 0)
+  ) %>%
+  # Carry lookup metadata forward (taxon_group, body_type)
+  left_join(lookup %>% select(species, taxon_group, body_type), by = "species")
+
+# Relative abundances within each station × sample_type (computed per metric)
+paired <- paired %>%
+  group_by(station, sample_type) %>%
+  mutate(
+    edna_rel = edna_reads / sum(edna_reads, na.rm = TRUE)
+  ) %>%
+  ungroup()
+
+if (has_count) {
+  paired <- paired %>%
+    group_by(station, sample_type) %>%
+    mutate(trawl_count_rel = trawl_count / sum(trawl_count, na.rm = TRUE)) %>%
+    ungroup()
+}
+if (has_weight) {
+  paired <- paired %>%
+    group_by(station, sample_type) %>%
+    mutate(trawl_weight_rel = trawl_weight / sum(trawl_weight, na.rm = TRUE)) %>%
+    ungroup()
+}
+
+both_detected <- paired %>% filter(edna_reads > 0)
+if (has_count)  both_detected <- both_detected %>% filter(trawl_count  > 0)
+if (has_weight) both_detected <- both_detected %>% filter(trawl_weight > 0)
+
+cat("Species × station pairs detected by both methods:", nrow(both_detected), "\n")
+```
+
+---
+
+# 3. Exploratory Summaries
+
+## Species overlap per station
+
+All trawl stations are shown regardless of whether a paired eDNA sample exists. Stations
+with no eDNA data show `—` in the eDNA columns.
+
+```{r species-overlap}
+trawl_pa_col <- if (has_count) "trawl_count" else "trawl_weight"
+
+# All trawl stations (the authoritative list)
+all_trawl_stations <- trawl_agg %>% distinct(station) %>% arrange(station)
+
+# eDNA summary per station × sample_type
+edna_summary <- paired %>%
+  filter(!is.na(sample_type)) %>%
+  group_by(station, sample_type) %>%
+  summarise(
+    n_edna = sum(edna_reads > 0),
+    n_both = sum(.data[[trawl_pa_col]] > 0 & edna_reads > 0, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# Trawl summary per station (independent of eDNA sample_type)
+trawl_summary <- trawl_agg %>%
+  filter(station %in% all_trawl_stations$station) %>%
+  group_by(station) %>%
+  summarise(n_trawl = sum(.data[[trawl_pa_col]] > 0, na.rm = TRUE), .groups = "drop")
+
+# Full cross of all trawl stations × eDNA sample types that exist in the data
+edna_types <- sort(unique(na.omit(paired$sample_type)))
+full_grid <- expand.grid(
+  station     = all_trawl_stations$station,
+  sample_type = edna_types,
+  stringsAsFactors = FALSE
+)
+
+overlap_tbl <- full_grid %>%
+  left_join(trawl_summary, by = "station") %>%
+  left_join(edna_summary,  by = c("station", "sample_type")) %>%
+  mutate(
+    has_edna   = station %in% unique(edna_agg$station),
+    n_edna_chr = if_else(!has_edna, "—", as.character(replace_na(n_edna, 0))),
+    n_both_chr = if_else(!has_edna, "—", as.character(replace_na(n_both, 0))),
+    pct_shared = if_else(
+      !has_edna | is.na(n_both), "—",
+      paste0(round(100 * n_both / pmax(n_trawl, 1), 1), "%")
+    )
+  ) %>%
+  select(station, sample_type, n_trawl, n_edna_chr, n_both_chr, pct_shared) %>%
+  arrange(station, sample_type)
+
+overlap_tbl %>%
+  kable(
+    caption   = "Species detected per station by each method (all trawl stations shown)",
+    col.names = c("Station", "eDNA sample type", "Trawl spp.", "eDNA spp.", "Shared spp.", "% Shared"),
+    align     = c("l","l","c","c","c","c")
+  ) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE) %>%
+  collapse_rows(columns = 1, valign = "top")
+```
+
+## Species overlap Venn diagrams
+
+Four pairwise comparisons between trawl and each eDNA sample type (plus all eDNA types
+pooled). Species sets are based on detections across **all paired stations**. Shared
+species are listed below each diagram.
+
+```{r venn-diagrams, fig.height=4.5, fig.width=5.5}
+# Species sets — trawl and each eDNA type, restricted to shared stations
+trawl_spp_set <- trawl_agg %>%
+  filter(station %in% shared_stations, .data[[trawl_pa_col]] > 0) %>%
+  pull(species) %>% unique() %>% sort()
+
+edna_spp_by_type <- edna_agg %>%
+  filter(station %in% shared_stations, edna_reads > 0) %>%
+  group_by(sample_type) %>%
+  summarise(species = list(sort(unique(species))), .groups = "drop") %>%
+  deframe()   # named list: sample_type -> character vector of species
+
+# Add pooled "All eDNA" set
+edna_spp_by_type[["All eDNA"]] <- edna_agg %>%
+  filter(station %in% shared_stations, edna_reads > 0) %>%
+  pull(species) %>% unique() %>% sort()
+
+# Helper: draw one Venn + print shared species beneath
+venn_with_list <- function(edna_type, edna_spp) {
+  shared <- sort(intersect(trawl_spp_set, edna_spp))
+  only_trawl <- sort(setdiff(trawl_spp_set, edna_spp))
+  only_edna  <- sort(setdiff(edna_spp, trawl_spp_set))
+
+  venn_sets <- list(Trawl = trawl_spp_set, eDNA = edna_spp)
+  names(venn_sets)[2] <- edna_type
+
+  p <- ggvenn(
+    venn_sets,
+    fill_color   = c("#4e79a7", "#f28e2b"),
+    fill_alpha   = 0.45,
+    stroke_size  = 0.6,
+    text_size    = 4,
+    set_name_size = 4.5
+  ) +
+    labs(title = paste("Trawl vs.", edna_type)) +
+    theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 13))
+
+  print(p)
+
+  # Species lists beneath the diagram
+  cat("\n**Shared species (n =", length(shared), "):**\n")
+  if (length(shared) > 0) {
+    cat(paste0("- *", shared, "*", collapse = "\n"), "\n")
+  } else {
+    cat("- None\n")
+  }
+
+  cat("\n**Trawl only (n =", length(only_trawl), "):**",
+      if (length(only_trawl) > 0) paste0(" ", paste(only_trawl, collapse = ", ")) else " None",
+      "\n")
+  cat("\n**", edna_type, "only (n =", length(only_edna), "):**",
+      if (length(only_edna) > 0) paste0(" ", paste(only_edna, collapse = ", ")) else " None",
+      "\n\n---\n\n")
+}
+
+# Draw each comparison
+for (etype in c(sort(names(edna_spp_by_type)[names(edna_spp_by_type) != "All eDNA"]),
+                "All eDNA")) {
+  venn_with_list(etype, edna_spp_by_type[[etype]])
+}
+```
+
+## Per-species heatmaps: relative abundance × station × method
+
+Each panel shows one species detected by **both** trawl and eDNA across paired stations.
+Rows = all trawl stations; columns = Trawl + eDNA sample types. Colour encodes
+**trawl relative abundance** (Trawl column) or **raw eDNA read counts** (eDNA columns),
+scaled 0–1 within each column. Grey tiles = stations with no eDNA sample.
+
+```{r species-heatmap, fig.height=5}
+# ── Build the heatmap data ────────────────────────────────────────────────────
+trawl_heat <- trawl_agg %>%
+  filter(station %in% all_trawl_stations$station) %>%
+  group_by(station) %>%
+  mutate(trawl_rel_abund = .data[[trawl_pa_col]] / sum(.data[[trawl_pa_col]], na.rm = TRUE)) %>%
+  ungroup() %>%
+  select(station, species, value = trawl_rel_abund) %>%
+  mutate(col_group = "Trawl")
+
+edna_heat <- edna_agg %>%
+  filter(station %in% all_trawl_stations$station) %>%
+  rename(value = edna_reads) %>%
+  mutate(col_group = sample_type) %>%
+  select(station, species, value, col_group)
+
+col_levels <- c("Trawl", sort(unique(edna_heat$col_group)))
+
+# ── Restrict to species detected by BOTH trawl and eDNA ──────────────────────
+trawl_detected <- trawl_agg %>%
+  filter(station %in% shared_stations, .data[[trawl_pa_col]] > 0) %>%
+  pull(species) %>% unique()
+
+edna_detected <- edna_agg %>%
+  filter(station %in% shared_stations, edna_reads > 0) %>%
+  pull(species) %>% unique()
+
+both_species <- sort(intersect(trawl_detected, edna_detected))
+
+if (length(both_species) == 0) {
+  cat("No species detected by both trawl and eDNA in paired stations.\n")
+} else {
+  cat("Species detected by both methods:", paste(both_species, collapse = ", "), "\n")
+
+  heat_grid <- expand.grid(
+    station   = all_trawl_stations$station,
+    species   = both_species,
+    col_group = col_levels,
+    stringsAsFactors = FALSE
+  )
+
+  heat_data <- heat_grid %>%
+    left_join(bind_rows(trawl_heat, edna_heat),
+              by = c("station", "species", "col_group")) %>%
+    mutate(
+      has_edna  = station %in% unique(edna_agg$station),
+      is_trawl  = col_group == "Trawl",
+      missing   = !is_trawl & !has_edna,
+      value     = if_else(missing, NA_real_, replace_na(value, 0)),
+      col_group = factor(col_group, levels = col_levels),
+      station   = factor(station, levels = rev(all_trawl_stations$station))
+    )
+
+  for (sp in both_species) {
+    sp_data <- heat_data %>% filter(species == sp)
+
+    sp_data <- sp_data %>%
+      group_by(col_group) %>%
+      mutate(value_scaled = case_when(
+        is.na(value)                  ~ NA_real_,
+        max(value, na.rm = TRUE) == 0 ~ 0,
+        TRUE ~ value / max(value, na.rm = TRUE)
+      )) %>%
+      ungroup()
+
+    p <- ggplot(sp_data, aes(x = col_group, y = station, fill = value_scaled)) +
+      geom_tile(color = "white", linewidth = 0.5) +
+      geom_text(
+        aes(label = case_when(
+          missing      ~ "",
+          is.na(value) ~ "0",
+          is_trawl     ~ scales::percent(value, accuracy = 0.1),
+          TRUE         ~ as.character(round(value))
+        )),
+        size = 2.8, color = "grey20"
+      ) +
+      scale_fill_gradientn(
+        colours  = c("#f0f7ff", "#6baed6", "#08519c"),
+        na.value = "#e8e8e8",
+        limits   = c(0, 1),
+        labels   = scales::percent,
+        name     = "Scaled value\n(within column)"
+      ) +
+      scale_x_discrete(position = "top") +
+      labs(
+        title    = paste0("*", sp, "*"),
+        subtitle = "Trawl = relative abundance  |  eDNA = read counts  |  Grey = no eDNA sample",
+        x = NULL, y = "Station"
+      ) +
+      theme_minimal(base_size = 11) +
+      theme(
+        plot.title       = ggtext::element_markdown(face = "italic", size = 12),
+        axis.text.x      = element_text(angle = 30, hjust = 0, face = "bold"),
+        panel.grid       = element_blank(),
+        legend.key.width = unit(1.2, "cm")
+      )
+
+    print(p)
+  }
+}
+```
+
+---
+
+# 4. Rank Correlation (Spearman's ρ)
+
+## 4a. Overall rank correlation per sample type
+
+Spearman's ρ is calculated across all station × species pairs within each eDNA sample type,
+separately for **count** and **biomass** where both are available. This lets you directly
+compare which trawl metric correlates more strongly with eDNA read abundance.
+
+```{r spearman-overall}
+# Helper: compute Spearman ρ + p for one trawl metric
+spearman_tbl <- function(df, trawl_col, metric_label) {
+  df %>%
+    filter(!is.na(sample_type), !is.na(.data[[trawl_col]])) %>%
+    group_by(sample_type) %>%
+    filter(
+      sum(!is.na(.data[[trawl_col]]) & !is.na(edna_reads)) >= 3,
+      var(.data[[trawl_col]], na.rm = TRUE) > 0,
+      var(edna_reads,         na.rm = TRUE) > 0
+    ) %>%
+    summarise(
+      trawl_metric = metric_label,
+      n_obs   = n(),
+      rho     = tryCatch(
+        cor(.data[[trawl_col]], edna_reads, method = "spearman", use = "complete.obs"),
+        error = function(e) NA_real_
+      ),
+      p_value = tryCatch(
+        cor.test(.data[[trawl_col]], edna_reads, method = "spearman")$p.value,
+        error = function(e) NA_real_
+      ),
+      .groups = "drop"
+    ) %>%
+    filter(!is.na(rho))
+}
+
+spearman_overall <- bind_rows(
+  if (has_count)  spearman_tbl(paired, "trawl_count",  "Count"),
+  if (has_weight) spearman_tbl(paired, "trawl_weight", "Biomass")
+) %>%
+  mutate(sig = case_when(
+    p_value < 0.001 ~ "***",
+    p_value < 0.01  ~ "**",
+    p_value < 0.05  ~ "*",
+    TRUE            ~ "ns"
+  ))
+
+spearman_overall %>%
+  mutate(rho = round(rho, 3), p_value = signif(p_value, 3)) %>%
+  arrange(sample_type, trawl_metric) %>%
+  kable(caption = "Spearman ρ: trawl (count & biomass) vs eDNA reads, by sample type",
+        col.names = c("Sample Type", "Trawl metric", "N obs.", "ρ", "p-value", "Sig.")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE) %>%
+  collapse_rows(columns = 1, valign = "top")
+```
+
+## 4b. Station-level Spearman ρ — Count vs Biomass
+
+```{r spearman-station}
+# Helper: station-level ρ for one trawl metric
+# Guards against groups with too few non-zero observations or zero variance
+spearman_station_tbl <- function(df, trawl_col, metric_label) {
+  df %>%
+    filter(!is.na(sample_type), !is.na(.data[[trawl_col]])) %>%
+    group_by(station, sample_type) %>%
+    # Need ≥2 complete pairs AND non-zero variance in both vectors
+    filter(
+      sum(!is.na(.data[[trawl_col]]) & !is.na(edna_reads)) >= 2,
+      var(.data[[trawl_col]], na.rm = TRUE) > 0,
+      var(edna_reads,         na.rm = TRUE) > 0
+    ) %>%
+    summarise(
+      trawl_metric = metric_label,
+      n_spp = n(),
+      rho   = tryCatch(
+        cor(.data[[trawl_col]], edna_reads, method = "spearman", use = "complete.obs"),
+        error = function(e) NA_real_
+      ),
+      .groups = "drop"
+    ) %>%
+    filter(!is.na(rho))
+}
+
+spearman_station <- bind_rows(
+  if (has_count)  spearman_station_tbl(paired, "trawl_count",  "Count"),
+  if (has_weight) spearman_station_tbl(paired, "trawl_weight", "Biomass")
+)
+
+ggplot(spearman_station,
+       aes(x = station, y = rho, fill = sample_type, alpha = trawl_metric)) +
+  geom_col(position = position_dodge(0.85), width = 0.8, color = "white") +
+  geom_hline(yintercept = 0, linewidth = 0.4) +
+  scale_fill_brewer(palette = "Set2") +
+  scale_alpha_manual(values = c("Count" = 1, "Biomass" = 0.55)) +
+  facet_wrap(~trawl_metric, ncol = 1) +
+  labs(
+    title = "Station-level Spearman ρ: Trawl vs eDNA",
+    subtitle = "Top = Count  |  Bottom = Biomass  |  Colour = eDNA sample type",
+    x = "Station", y = "Spearman ρ", fill = "Sample type", alpha = "Trawl metric"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+---
+
+# 5. Relative Abundance Correlation
+
+## 5a. Scatter plots per sample type — Count vs Biomass
+
+```{r relabund-scatter, fig.height=7}
+# Pivot both trawl relative abundance metrics to long for faceting
+rel_long <- paired %>%
+  filter(!is.na(sample_type)) %>%
+  select(station, species, sample_type, edna_rel,
+         any_of(c("trawl_count_rel", "trawl_weight_rel"))) %>%
+  pivot_longer(
+    cols      = any_of(c("trawl_count_rel", "trawl_weight_rel")),
+    names_to  = "trawl_metric",
+    values_to = "trawl_rel"
+  ) %>%
+  filter(!is.na(trawl_rel), (trawl_rel > 0 | edna_rel > 0)) %>%
+  mutate(trawl_metric = recode(trawl_metric,
+                               "trawl_count_rel"  = "Count",
+                               "trawl_weight_rel" = "Biomass"))
+
+ggplot(rel_long, aes(x = trawl_rel, y = edna_rel, color = sample_type)) +
+  geom_point(alpha = 0.5, size = 1.6) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 0.8) +
+  facet_grid(trawl_metric ~ sample_type) +
+  scale_x_continuous(labels = scales::percent_format(accuracy = 0.1)) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 0.1)) +
+  scale_color_brewer(palette = "Set2", guide = "none") +
+  labs(
+    title = "Relative Abundance: Trawl vs eDNA",
+    subtitle = "Rows = trawl metric  |  Columns = eDNA sample type",
+    x = "Trawl relative abundance", y = "eDNA relative abundance"
+  ) +
+  theme_bw(base_size = 11)
+```
+
+## 5b. Log-transformed Pearson r — Count vs Biomass
+
+```{r relabund-log}
+log_cor <- bind_rows(
+  if (has_count) {
+    paired %>%
+      filter(!is.na(sample_type)) %>%
+      group_by(sample_type) %>%
+      filter(
+        sum(!is.na(trawl_count) & !is.na(edna_reads)) >= 3,
+        var(log1p(trawl_count), na.rm = TRUE) > 0,
+        var(log1p(edna_reads),  na.rm = TRUE) > 0
+      ) %>%
+      summarise(
+        trawl_metric = "Count",
+        pearson_r = tryCatch(
+          cor(log1p(trawl_count), log1p(edna_reads), use = "complete.obs"),
+          error = function(e) NA_real_
+        ),
+        p_value = tryCatch(
+          cor.test(log1p(trawl_count), log1p(edna_reads))$p.value,
+          error = function(e) NA_real_
+        ),
+        .groups = "drop"
+      ) %>% filter(!is.na(pearson_r))
+  },
+  if (has_weight) {
+    paired %>%
+      filter(!is.na(sample_type)) %>%
+      group_by(sample_type) %>%
+      filter(
+        sum(!is.na(trawl_weight) & !is.na(edna_reads)) >= 3,
+        var(log1p(trawl_weight), na.rm = TRUE) > 0,
+        var(log1p(edna_reads),   na.rm = TRUE) > 0
+      ) %>%
+      summarise(
+        trawl_metric = "Biomass",
+        pearson_r = tryCatch(
+          cor(log1p(trawl_weight), log1p(edna_reads), use = "complete.obs"),
+          error = function(e) NA_real_
+        ),
+        p_value = tryCatch(
+          cor.test(log1p(trawl_weight), log1p(edna_reads))$p.value,
+          error = function(e) NA_real_
+        ),
+        .groups = "drop"
+      ) %>% filter(!is.na(pearson_r))
+  }
+) %>%
+  mutate(sig = case_when(
+    p_value < 0.001 ~ "***",
+    p_value < 0.01  ~ "**",
+    p_value < 0.05  ~ "*",
+    TRUE ~ "ns"
+  ))
+
+log_cor %>%
+  mutate(pearson_r = round(pearson_r, 3), p_value = signif(p_value, 3)) %>%
+  arrange(sample_type, trawl_metric) %>%
+  kable(caption = "Pearson r on log1p(abundance): Count vs Biomass, by sample type",
+        col.names = c("Sample Type", "Trawl metric", "Pearson r", "p-value", "Sig.")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE) %>%
+  collapse_rows(columns = 1, valign = "top")
+```
+
+---
+
+# 6. Differences Among eDNA Sample Types
+
+## 6a. Kruskal-Wallis + Dunn post-hoc test on ρ values
+
+```{r kruskal-type}
+# Test whether station-level ρ differs by sample type
+kw_result <- kruskal.test(rho ~ sample_type, data = spearman_station)
+kw_tidy <- tidy(kw_result)
+
+cat("Kruskal-Wallis test: H =", round(kw_tidy$statistic, 3),
+    ", df =", kw_tidy$parameter,
+    ", p =", signif(kw_tidy$p.value, 3), "\n")
+
+# Pairwise Wilcoxon (Dunn-like) if K-W is significant
+if (kw_tidy$p.value < 0.05 && n_distinct(spearman_station$sample_type) >= 2) {
+  pairwise_result <- pairwise.wilcox.test(
+    spearman_station$rho,
+    spearman_station$sample_type,
+    p.adjust.method = "BH"
+  )
+  cat("\nPairwise Wilcoxon (BH-adjusted p-values):\n")
+  print(pairwise_result$p.value)
+} else {
+  cat("No significant difference among sample types (or <2 types), skipping post-hoc.\n")
+}
+```
+
+## 6b. Boxplot of station-level ρ by sample type
+
+```{r rho-boxplot, fig.height=5}
+ggplot(spearman_station, aes(x = sample_type, y = rho, fill = sample_type)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.7, width = 0.5) +
+  geom_jitter(width = 0.15, size = 2.2, alpha = 0.8, color = "grey30") +
+  facet_wrap(~trawl_metric, ncol = 2) +
+  scale_fill_brewer(palette = "Set2", guide = "none") +
+  labs(
+    title = "Station-level Spearman ρ by eDNA Sample Type",
+    subtitle = "Faceted by trawl metric",
+    x = "Sample type", y = "Spearman ρ (trawl vs eDNA)"
+  ) +
+  theme_bw(base_size = 13)
+```
+
+## 6c. NMDS ordination — do sample types cluster separately?
+
+```{r nmds, fig.height=6}
+# Build community matrix: station × species, summed reads, per sample type
+nmds_list <- edna_agg %>%
+  filter(station %in% shared_stations) %>%
+  group_by(station, sample_type) %>%
+  pivot_wider(names_from = species, values_from = edna_reads, values_fill = 0) %>%
+  ungroup()
+
+nmds_meta <- nmds_list %>% select(station, sample_type)
+nmds_mat  <- nmds_list %>% select(-station, -sample_type) %>% as.matrix()
+
+# Remove all-zero rows/cols
+keep_rows <- rowSums(nmds_mat) > 0
+keep_cols <- colSums(nmds_mat) > 0
+nmds_mat  <- nmds_mat[keep_rows, keep_cols]
+nmds_meta <- nmds_meta[keep_rows, ]
+
+if (nrow(nmds_mat) >= 3) {
+  set.seed(42)
+  ord <- metaMDS(nmds_mat, distance = "bray", k = 2, trymax = 100, trace = FALSE)
+
+  scores_df <- as.data.frame(scores(ord, "sites")) %>%
+    bind_cols(nmds_meta)
+
+  ggplot(scores_df, aes(x = NMDS1, y = NMDS2, color = sample_type, shape = sample_type)) +
+    geom_point(size = 3.5, alpha = 0.85) +
+    geom_text_repel(aes(label = station), size = 3, max.overlaps = 10) +
+    stat_ellipse(aes(group = sample_type), type = "t", level = 0.75, linewidth = 0.6) +
+    scale_color_brewer(palette = "Set2") +
+    labs(
+      title = "NMDS Ordination of eDNA Communities",
+      subtitle = paste0("Bray-Curtis dissimilarity | stress = ", round(ord$stress, 3)),
+      color = "Sample type", shape = "Sample type"
+    ) +
+    theme_bw(base_size = 13)
+} else {
+  cat("Insufficient observations for NMDS.\n")
+}
+```
+
+## 6d. PERMANOVA — do sample types differ in community composition?
+
+```{r permanova}
+if (nrow(nmds_mat) >= 3) {
+  perm_result <- adonis2(
+    nmds_mat ~ sample_type + station,
+    data    = nmds_meta,
+    method  = "bray",
+    permutations = 999
+  )
+  print(perm_result)
+} else {
+  cat("Insufficient observations for PERMANOVA.\n")
+}
+```
+
+---
+
+# 7. Species Detected by Either Method
+
+This section shows mean relative abundance (trawl) and mean relative abundance (eDNA)
+side by side for all species detected by **either** the trawl or the eDNA survey across
+paired stations. This is more informative than restricting to top trawl species when the
+eDNA primer targets a specific taxonomic group (e.g. cephalopods) that may represent a
+small fraction of trawl catch.
+
+```{r top-species, fig.height=7}
+# Choose the primary trawl relative abundance metric
+primary_trawl_rel <- if (has_count) "trawl_count_rel" else "trawl_weight_rel"
+primary_label     <- if (has_count) "Trawl (count)"   else "Trawl (biomass)"
+
+# All species detected by trawl OR eDNA across paired stations
+focal_sp <- paired %>%
+  filter(!is.na(sample_type)) %>%
+  filter(edna_reads > 0 | .data[[if (has_count) "trawl_count" else "trawl_weight"]] > 0) %>%
+  pull(species) %>% unique() %>% sort()
+
+top_paired <- paired %>%
+  filter(species %in% focal_sp, !is.na(sample_type)) %>%
+  group_by(species, sample_type) %>%
+  summarise(
+    mean_trawl_rel = mean(.data[[primary_trawl_rel]], na.rm = TRUE),
+    mean_edna_rel  = mean(edna_rel, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  pivot_longer(c(mean_trawl_rel, mean_edna_rel),
+               names_to = "method", values_to = "mean_rel_abund") %>%
+  mutate(method = recode(method,
+                         "mean_trawl_rel" = primary_label,
+                         "mean_edna_rel"  = "eDNA"))
+
+if (nrow(top_paired) == 0 || n_distinct(top_paired$species) == 0) {
+  cat("No species detected by either method in paired stations.\n")
+} else {
+  n_types <- n_distinct(top_paired$sample_type)
+
+  p <- ggplot(top_paired,
+              aes(x = reorder(species, mean_rel_abund),
+                  y = mean_rel_abund,
+                  fill = method)) +
+    geom_col(position = position_dodge(0.8), width = 0.7) +
+    scale_fill_manual(values = setNames(c("#4e79a7", "#f28e2b"),
+                                        c(primary_label, "eDNA"))) +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 0.1)) +
+    coord_flip() +
+    labs(
+      title    = "Mean Relative Abundance: All Detected Species",
+      subtitle = "Trawl = relative abundance within station | eDNA = relative reads within station × sample type",
+      x = NULL, y = "Mean relative abundance", fill = "Method"
+    ) +
+    theme_bw(base_size = 11) +
+    theme(legend.position = "top")
+
+  if (n_types > 1) {
+    p <- p + facet_wrap(~sample_type, ncol = 1)
+  } else {
+    p <- p + labs(caption = paste("eDNA sample type:", unique(top_paired$sample_type)))
+  }
+
+  print(p)
+}
+```
+
+---
+
+# 8. Session Info
+
+```{r session-info}
+sessionInfo()
+```
