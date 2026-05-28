@@ -1,0 +1,50 @@
+rm(list = ls()) 
+library(readr) 
+
+# Load and view data
+data <- read_csv("dmr_noaa_edna_concentration_boxplot.csv", na = c("", "N/A", "#DIV/0!")) 
+View(data) # Capitalized 'V' to fix R function error
+
+# Select columns
+data <- data[, c("SampleID", "Sample_Type", "Replicate", "Trawl_number", "Qubit_average")] 
+
+# Filter data
+data <- droplevels(data[data$Sample_Type != "blank",]) 
+
+# Factorize target variable
+data$Sample_Type <- factor(data$Sample_Type, levels = c("DMR", "NOAA")) 
+
+# Subset to remove outliers
+data_no_out <- subset(data, Qubit_average < 30) 
+
+# Base Boxplots
+boxplot(data$Qubit_average ~ data$Trawl_number) 
+boxplot(data_no_out$Qubit_average ~ data_no_out$Trawl_number) 
+boxplot(data$Qubit_average ~ data$Sample_Type) 
+
+# Main Boxplot with Jitter Points
+# Changed 'outline = false' to 'outline = FALSE' (R requires uppercase)
+boxplot(data_no_out$Qubit_average ~ data_no_out$Sample_Type, 
+        outline = FALSE, 
+        ylab = "dna ng_ul", 
+        xlab = "Sample type", 
+        main = "dna concentration by sample type") 
+
+# Fixed: Matched data source to 'data_no_out' so points align with the boxplot
+stripchart(Qubit_average ~ Sample_Type, 
+           data = data_no_out, 
+           method = "jitter", 
+           add = TRUE, 
+           vertical = TRUE, 
+           pch = 20, 
+           col = "black") 
+
+# Analysis of variance (Full Data)
+mod_1 <- lm(Qubit_average ~ Sample_Type, data = data) 
+anova_1 <- aov(mod_1) 
+TukeyHSD(anova_1) # Capitalized T, H, S, D
+
+# Analysis of variance (No Outliers)
+mod_1_no_out <- lm(Qubit_average ~ Sample_Type, data = data_no_out) 
+anova_1_no_out <- aov(mod_1_no_out) 
+TukeyHSD(anova_1_no_out) # Capitalized T, H, S, D
