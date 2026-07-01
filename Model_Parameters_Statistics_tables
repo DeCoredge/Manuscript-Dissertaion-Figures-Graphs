@@ -107,3 +107,23 @@ table_title <- textGrob("Ceph18s Model Parameters & Statistics",               #
 
 grid.newpage()
 grid.draw(ceph18s_parameters)
+
+
+# Use data from csv file to create tables
+edna_stats_table <- read.csv("eDNA_Boxplot_Model_Parameters.csv", header = TRUE, sep = ",")
+
+# Define custom table theme
+table_theme <- ttheme_default( core = list(fg_params = list(col = "black")), 
+                               colhead = list(fg_params = list(col = "black")))
+
+# Create table grob with the custom theme applied
+edna_parameters <- tableGrob(edna_stats_table, theme = table_theme)
+
+# Create the title object
+table_title <- textGrob("eDNA concentration by sample type Model Parameters & Statistics",               # Your title text
+                        gp = gpar(fontsize = 16, fontface = "bold", col = "black") )# Title styling
+
+# View the final table
+
+grid.newpage()
+grid.draw(edna_parameters)
