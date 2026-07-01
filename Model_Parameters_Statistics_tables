@@ -1,0 +1,109 @@
+#Clear current working environment
+rm(list = ls())
+
+#Instal package that allows you to make tables
+install.packages("gt")
+install.packages("grid")
+install.packages("gridExtra")
+
+library(grid)
+library(gridExtra)
+
+# Use data from csv file to create tables
+mifish_stats_table <- read.csv("MiFish_Model_Parameters_Statistics.csv", header = TRUE, sep = ",")
+
+# Define custom table theme
+table_theme <- ttheme_default( core = list(fg_params = list(col = "black")), 
+  colhead = list(fg_params = list(col = "black")))
+
+# Create table grob with the custom theme applied
+mifish_parameters <- tableGrob(mifish_stats_table, theme = table_theme)
+
+# Create the title object
+table_title <- textGrob("MiFish Model Parameters & Statistics",               # Your title text
+  gp = gpar(fontsize = 16, fontface = "bold", col = "black") )# Title styling
+
+# View the final table
+
+grid.newpage()
+grid.draw(mifish_parameters)
+
+
+# Use data from csv file to create tables
+leray_stats_table <- read.csv("Leray_Model_Parameters_Statistics.csv", header = TRUE, sep = ",")
+
+# Define custom table theme
+table_theme <- ttheme_default( core = list(fg_params = list(col = "black")), 
+                               colhead = list(fg_params = list(col = "black")))
+
+# Create table grob with the custom theme applied
+leray_parameters <- tableGrob(leray_stats_table, theme = table_theme)
+
+# Create the title object
+table_title <- textGrob("Leray Model Parameters & Statistics",               # Your title text
+                        gp = gpar(fontsize = 16, fontface = "bold", col = "black") )# Title styling
+
+# View the final table
+
+grid.newpage()
+grid.draw(leray_parameters)
+
+
+# Use data from csv file to create tables
+multiplicative_leray_stats_table <- read.csv("Multiplicative_Leray_Model_Parameters_Statistics.csv", header = TRUE, sep = ",")
+
+# Define custom table theme
+table_theme <- ttheme_default( core = list(fg_params = list(col = "black")), 
+                               colhead = list(fg_params = list(col = "black")))
+
+# Create table grob with the custom theme applied
+multiplicative_leray_parameters <- tableGrob(multiplicative_leray_stats_table, theme = table_theme)
+
+# Create the title object
+table_title <- textGrob("Multiplicative Leray Model Parameters & Statistics",               # Your title text
+                        gp = gpar(fontsize = 16, fontface = "bold", col = "black") )# Title styling
+
+# View the final table
+
+grid.newpage()
+grid.draw(multiplicative_leray_parameters)
+
+
+# Use data from csv file to create tables
+additive_leray_stats_table <- read.csv("Additive_Leray_Model_Parameters_Statistics.csv", header = TRUE, sep = ",")
+
+# Define custom table theme
+table_theme <- ttheme_default( core = list(fg_params = list(col = "black")), 
+                               colhead = list(fg_params = list(col = "black")))
+
+# Create table grob with the custom theme applied
+additive_leray_parameters <- tableGrob(additive_leray_stats_table, theme = table_theme)
+
+# Create the title object
+table_title <- textGrob("Additive Leray Model Parameters & Statistics",               # Your title text
+                        gp = gpar(fontsize = 16, fontface = "bold", col = "black") )# Title styling
+
+# View the final table
+
+grid.newpage()
+grid.draw(additive_leray_parameters)
+
+
+# Use data from csv file to create tables
+ceph18s_stats_table <- read.csv("Ceph18s_Model_Parameters_Statistics.csv", header = TRUE, sep = ",")
+
+# Define custom table theme
+table_theme <- ttheme_default( core = list(fg_params = list(col = "black")), 
+                               colhead = list(fg_params = list(col = "black")))
+
+# Create table grob with the custom theme applied
+ceph18s_parameters <- tableGrob(ceph18s_stats_table, theme = table_theme)
+
+# Create the title object
+table_title <- textGrob("Ceph18s Model Parameters & Statistics",               # Your title text
+                        gp = gpar(fontsize = 16, fontface = "bold", col = "black") )# Title styling
+
+# View the final table
+
+grid.newpage()
+grid.draw(ceph18s_parameters)
