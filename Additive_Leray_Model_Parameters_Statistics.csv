@@ -1,0 +1,4 @@
+Model Formula,Estimate,Standard Error,Z-value,P-value (Pr(>|z|),Degrees of Freedom,Akaike Information Criterion (AIC)
+Trawl abundance ~ Intercept,1.381354,0.140981,9.798,< 2x10⁻¹⁶,44,782
+Trawl abundance ~ Intercept + Leray,0.3318,0.002047,16.208,< 2x10⁻¹⁶,42,517.3
+Trawl abundance ~ Intercept + Leray + Body Type,-0.22719,0.153511,-1.48,0.139,42,517.3
