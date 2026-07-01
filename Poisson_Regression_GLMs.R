@@ -1,3 +1,5 @@
+rm(list = ls())
+
 #Perform a Poisson Regression GLM using the abundance proportion of Fish species to their read counts in csv.
 edna_data<- read.csv("MiFish_Abundance_Poisson.csv", header = TRUE)
 edna_data$Abundance <- edna_data$Abundance 
@@ -21,14 +23,16 @@ summary(edna_MiFish_model_02)
 
 # Add the model prediction to the plot
 plot(edna_data$MiFish ~ edna_data$Abundance, xlab = "Total Abundance",
-     ylab = "MiFish Read Count")
+     ylab = "MiFish Read Count", 
+     main = "Fish abundance ~ MiFish read counts linear regression model")
 abline(edna_MiFish_model, col="green", lwd=2)
 abline(edna_MiFish_model_02, col="purple", lwd=2)
 
 # Add the model prediction to the plot
 plot(log10(edna_data$MiFish) ~ log10(edna_data$Abundance),xlab = "Total Abundance",
-     ylab = "MiFish Read Count" )
-abline(a=0, b=1) # one to one line
+     ylab = "MiFish Read Count", 
+     main = "Fish abundance ~ MiFish read counts log-linear regression model")
+abline(a=0, b=1)
 
 
 #Perform a Poisson Regression GLM using the abundance proportion of all Invert. species to their read counts in csv.
@@ -54,13 +58,15 @@ summary(edna_Leray_model_02)
 
 # Add the model prediction to the plot
 plot(edna_data_02$Leray ~ edna_data_02$Abundance, xlab = "Total Abundance",
-     ylab = "Leray Read Count")
+     ylab = "Leray Read Count", 
+     main = "Invertebrate abundance ~ Leray read counts linear regression model")
 abline(edna_Leray_model, col="green", lwd=2)
 abline(edna_Leray_model_02, col="purple", lwd=2)
 
 # Add the model prediction to the plot
 plot(log10(edna_data_02$Leray) ~ log10(edna_data_02$Abundance), xlab = "Total Abundance",
-     ylab = "Leray Read Count")
+     ylab = "Leray Read Count", 
+     main = "Invertebrate abundance ~ Leray read counts log-linear regression model")
 abline(a=0, b=1) # one to one line
 
 #Perform a Multiplicative factor log-Poisson Regression GLM using the abundance proportion of all Invert. species to their read counts, and to their body type in csv.
@@ -87,13 +93,15 @@ summary(edna_Leray_model_02)
 
 # Add the model prediction to the plot
 plot(edna_data_02$Leray ~ edna_data_02$Abundance, xlab = "Total Abundance",
-     ylab = "Multiplicative Leray Read Count" )
+     ylab = "Multiplicative Leray Read Count",  
+     main = "Invertebrate abundance ~ Leray read counts multiplicative linear regression model")
 abline(edna_Leray_model, col="green", lwd=2)
 abline(edna_Leray_model_02, col="purple", lwd=2)
 
 # Add the model prediction to the plot
 plot(log10(edna_data_02$Leray) ~ log10(edna_data_02$Abundance), xlab = "Total Abundance",
-     ylab = "Multiplicative Leray Read Count")
+     ylab = "Multiplicative Leray Read Count", 
+     main = "Invertebrate abundance ~ Leray read counts multiplicative log-linear regression model")
 abline(a=0, b=1) # one to one line
 
 #Perform a Additive factor log-Poisson Regression GLM using the abundance proportion of all Invert. species to their read counts, and to their body type in csv.
@@ -120,13 +128,15 @@ summary(edna_Leray_model_02)
 
 # Add the model prediction to the plot
 plot(edna_data_02$Leray ~ edna_data_02$Abundance, xlab = "Total Abundance",
-     ylab = "Additive Leray Read Count")
+     ylab = "Additive Leray Read Count", 
+     main = "Invertebrate abundance ~ Leray read counts additive linear regression model")
 abline(edna_Leray_model, col="green", lwd=2)
 abline(edna_Leray_model_02, col="purple", lwd=2)
 
 # Add the model prediction to the plot
 plot(log10(edna_data_02$Leray) ~ log10(edna_data_02$Abundance),  xlab = "Total Abundance",
-     ylab = "Additive Leray Read Count")
+     ylab = "Additive Leray Read Count", 
+     main = "Invertebrate abundance ~ Leray read counts additive log-linear regression model")
 abline(a=0, b=1) # one to one line
 
 
@@ -152,45 +162,13 @@ summary(edna_Ceph18s_model_02)
 
 # Add the model prediction to the plot
 plot(edna_data_03$Ceph18s ~ edna_data_03$Abundance, xlab = "Total Abundance",
-     ylab = "Ceph18S Read Count")
+     ylab = "Ceph18S Read Count", 
+     main = "Cephalopod abundance ~ Ceph18s read counts linear regression model")
 abline(edna_Ceph18s_model, col="green", lwd=2)
 abline(edna_Ceph18s_model_02, col="purple", lwd=2)
 
 # Add the model prediction to the plot
 plot(log10(edna_data_03$Ceph18s) ~ log10(edna_data_03$Abundance), xlab = "Total Abundance",
-     ylab = "Ceph18S Read Count")
+     ylab = "Ceph18S Read Count", 
+     main = "Cephalopod abundance ~ Ceph18s read counts log-linear regression model")
 abline(a=0, b=1) # one to one line
-
-#Perform a Poisson Regression GLM using the abundance of eDNA collected from different located metaprobes to their in csv.
-edna_data<- read.csv("Metaprobe_eDNA_Location.csv", header = TRUE)
-edna_data$Metaprobes <- edna_data$Metaprobes
-edna_data$Location <- edna_data$Location 
-edna_data$Quantity <- edna_data$Quantity
-
-#Replace N/A in csv dataset table.
-edna_data<- replace(edna_data, is.na(edna_data), "")
-
-#Fix any dataframe formating issues
-edna_data$Metaprobes <- as.factor(edna_data$Metaprobes)
-edna_data$Location <- as.factor(edna_data$Location)
-edna_data$Quantity   <- as.numeric(edna_data$Quantity)
-
-#Fit data into Poisson Regression GLMs.
-edna_Metaprobe_model <- glm(Quantity ~ 1, data= edna_data, family = "poisson")
-edna_Metaprobe_model_02 <- glm(Quantity ~ Location, data= edna_data,
-                            family = "poisson")
-
-#View GLMs & Explore model fits and independent variables signifance
-summary(edna_Metaprobe_model)
-summary(edna_Metaprobe_model_02)
-
-#'Location' is a factor (categorical), a boxplot is more appropriate than a scatter plot.Using a lighter color so points show up, Darker border for contrast, and have outline FALSE to Hide default outliers so they aren't doubled
-
-plot(Quantity ~ Location, data = edna_data, 
-     main = "eDNA Quantity by Location", ylab = "Abundance", xlab = "Location",
-     col = "green", border = "purple", outline = FALSE)
-
-#Abline doesn't work directly with GLMs like this because GLMs are non-linear.
-# To see if Location is significant:
-
-anova(edna_Metaprobe_model, edna_Metaprobe_model_02, test = "Chisq")
