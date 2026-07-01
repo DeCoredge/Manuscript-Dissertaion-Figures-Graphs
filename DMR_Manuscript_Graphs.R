@@ -20,7 +20,10 @@ fish_barchart<-fish_barchart +
                                  y = Proportion_Abundance_Reads, 
                                  fill = Trawl_Proportion_Primers), 
            position= "dodge") +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  labs( title = "Fish Species Abundance and Primer Read Count Proportions",
+        x = "Species", y = "Proportion Abundance Reads", 
+        fill = "Trawl Proportion Primers")
 
 fish_barchart
 
@@ -42,7 +45,11 @@ ceph_barchart<-ceph_barchart +
                                  y = Proportion_Abundance_Reads, 
                                  fill = Trawl_Proportion_Primers), 
            position= "dodge") +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  labs( title = "Cephalopod Species Abundance and Primer Read Count Proportions", 
+        x = "Species", y = "Proportion Abundance Reads", 
+        fill = "Trawl Proportion Primers")
+
 
 ceph_barchart
 
@@ -60,9 +67,13 @@ invert_data<- pivot_longer(invert_data, cols = c("Abundance", "Leray"),
 invert_barchart<- ggplot()
 invert_barchart<-invert_barchart + 
   geom_col(data = invert_data, aes(x = Species,
-                                 y = Proportion_Abundance_Reads, 
-                                 fill = Trawl_Proportion_Primers), 
+                                   y = Proportion_Abundance_Reads, 
+                                   fill = Trawl_Proportion_Primers), 
            position= "dodge") +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  labs( title = "Invertebrate Species Abundance and Primer Read Count Proportions", 
+        x = "Species", y = "Proportion Abundance Reads", 
+        fill = "Trawl Proportion Primers")
+
 
 invert_barchart
