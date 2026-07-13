@@ -22,7 +22,7 @@ execute:
 
 This report harmonizes paired trawl survey and eDNA metabarcoding datasets collected at the same stations, then tests:
 
-1. **Rank correlation** (Spearman's ρ) between trawl catch and eDNA read abundance
+1. **Rank correlation** (Spearman's ρ) between eDNA read abundance and trawl biomass
 2. **Relative abundance correlation** across all paired station × species observations
 3. **Differences among eDNA sample types** (e.g. filter type, replicate type) in their correlation with trawl data
 
