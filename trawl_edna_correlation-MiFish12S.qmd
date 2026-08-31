@@ -36,54 +36,83 @@ library(data.table)
 library(vegan)
 library(ggplot2)
 library(ggrepel)
+library(ggtext)
+library(ggvenn)
 library(patchwork)
 library(knitr)
 library(kableExtra)
 library(broom)
-library(ggvenn)
 
 # ── USER: Update these file paths ────────────────────────────────────────────
-trawl_file      <- "inputs/trawl_taxa_subset.csv"          # Long-format trawl CSV
-edna_spp_file   <- "inputs/SPECIES_counts_Trawl_MiFish12S.csv"  # Species-collapsed table: rows = species,
-                                              #   cols = sample IDs + "Species" + "full_tax"
-edna_meta_file  <- "inputs/eDNA_Metabarcoding_Metadata_EG301-584_metadata.csv"       # Sample metadata: sample_id + sample_type + station_id
-lookup_file     <- "inputs/species_types.csv"        # Common-name ↔ binomial lookup table
+trawl_file       <- "inputs/trawl_taxa_subset.csv"           # Long-format trawl CSV
+edna_spp_files   <- c(                          # One entry per sequencing run —
+  run1 = "inputs/SPECIES_counts_Trawl_MiFish12S_Run1.csv",    #   named with a short run label
+  run2 = "inputs/SPECIES_counts_Trawl_MiFish12S_Run2.csv"     #   UPDATE when correct Run2 file available
+)
+edna_meta_file   <- "inputs/Metabarcoding_Metadata.csv"     # Sample metadata — must cover ALL runs
+lookup_file      <- "inputs/species_types.csv"              # Common-name ↔ binomial lookup table
 
 # ── USER: Update these column names to match your files ──────────────────────
 # Trawl columns
-trawl_station_col  <- "TowID"   # Station/site identifier
-trawl_species_col  <- "Common_Name"      # Common name column in trawl (e.g. "Atlantic Cod")
-trawl_count_col    <- "Expanded_Catch"        # Individual counts  — set to NA if column absent
-trawl_weight_col   <- "Expanded_Weight_kg"    # Biomass column     — set to NA if column absent
-                                     # Both columns are retained; correlations run for each
+trawl_station_col  <- "TowID"          # Station/site identifier
+trawl_species_col  <- "Common_Name"    # Common name column in trawl
+trawl_count_col    <- "Number_Caught"  # Individual counts  — set to NA if column absent
+trawl_weight_col   <- "Weight_kg"      # Biomass column     — set to NA if column absent
 
-# eDNA species table columns
-edna_species_col   <- "Species"      # Binomial species name column in the eDNA table
-edna_tax_col       <- "full_tax"     # Full taxonomy string column (kept but not required)
-
-# Lookup table columns (species_types.csv)
-lookup_common_col  <- "Common_Name"  # Common name column  → matches trawl species
-lookup_binom_col   <- "Species"      # Binomial name column → matches eDNA species
-lookup_group_col   <- "Fish_Invert"  # Taxonomic group (Fish / Invertebrate)
-lookup_type_col    <- "Body_Type"    # Body type (Slimy / Crunchy) — optional stratifier
+# eDNA species table columns (same structure expected in every run file)
+edna_species_col   <- "Species"        # Binomial species name column
+edna_tax_col       <- "full_tax"       # Full taxonomy string column
 
 # eDNA metadata columns
-meta_sample_col    <- "ReadFile"    # Sample identifier (must match column names in edna_spp_file)
-meta_station_col   <- "TrawlID"   # Station identifier (must match trawl station IDs)
-meta_type_col      <- "Sample_type"  # Column distinguishing the 3 sample types
+meta_sample_col    <- "ReadFile"       # Unique sample ID matching column names in eDNA tables
+                                       #   NOTE: must match the sample column headers in the species table
+meta_station_col   <- "TrawlID"        # Station identifier (matches trawl station IDs)
+meta_type_col      <- "Sample_type"    # Column distinguishing the 3 sample types
+meta_run_col       <- "RunID"          # Sequencing run identifier column in metadata
+meta_primer_col    <- "Primer"         # Primer/amplicon column in metadata (set to NA if absent)
+
+# Primer(s) to KEEP — only samples sequenced with this primer are used.
+# This prevents mixing amplicons (e.g. CEPH18S + MiFish12S) when the metadata
+# covers multiple primer sets. Set to NULL to keep all primers.
+valid_primers <- c("MiFish12S")          # primer name exactly as it appears in the metadata
+                                       # Primer column. Set to NULL to skip filter.
+
+# Sample types to KEEP (all others — controls, mocks, NTCs — are excluded)
+valid_sample_types <- c("Bottom_metaprobe", "Top_metaprobe", "Slush")
+
+# Station ID value used for controls/blanks that should be excluded
+invalid_station_values <- c("NA", "", "na")
+
+# Lookup table columns (species_types.csv)
+lookup_common_col  <- "Common_Name"    # Common name  → matches trawl species
+lookup_binom_col   <- "Species"        # Binomial name → matches eDNA species
+lookup_group_col   <- "Fish_Invert"    # Taxonomic group (Fish / Invertebrate)
+lookup_type_col    <- "Body_Type"      # Body type (Slimy / Crunchy)
+
+# Deduplication strategy for samples with the same station × sample_type in both runs:
+# "max_reads" = keep the sample with the highest total read count (recommended)
+# "run1"      = always prefer run 1
+# "run2"      = always prefer run 2
+dedup_strategy <- "max_reads"
 # ─────────────────────────────────────────────────────────────────────────────
 ```
 
 ```{r load-data}
-# Load files
-trawl_raw    <- read_csv(trawl_file,     show_col_types = FALSE)
-edna_spp_raw <- read_csv(edna_spp_file,  show_col_types = FALSE)
-meta_raw     <- read_csv(edna_meta_file, show_col_types = FALSE)
-lookup_raw   <- read_csv(lookup_file,    show_col_types = FALSE)
+trawl_raw  <- read_csv(trawl_file,    show_col_types = FALSE)
+meta_raw   <- read_csv(edna_meta_file, show_col_types = FALSE)
+lookup_raw <- read_csv(lookup_file,    show_col_types = FALSE)
+
+# Load each sequencing run file and tag with its run label
+edna_spp_raw_list <- imap(edna_spp_files, function(path, run_label) {
+  df <- read_csv(path, show_col_types = FALSE)
+  df$.run <- run_label
+  df
+})
 
 cat("Trawl rows:", nrow(trawl_raw), "\n")
-cat("eDNA species table:", nrow(edna_spp_raw), "species ×", ncol(edna_spp_raw), "columns\n")
 cat("eDNA metadata rows:", nrow(meta_raw), "\n")
+iwalk(edna_spp_raw_list, ~ cat("Run", .y, "—", nrow(.x), "species ×",
+                                ncol(.x) - 1, "columns\n"))
 cat("Lookup table rows:", nrow(lookup_raw), "\n")
 ```
 
@@ -125,37 +154,192 @@ cat("Trawl species (common names):", n_distinct(trawl_agg$common_name), "\n")
 cat("Count column present:", has_count, "| Weight column present:", has_weight, "\n")
 ```
 
-## 2b. eDNA Data — Pivot Species Table to Long Format
+## 2b. eDNA Data — Load & Combine Sequencing Runs
 
-Your eDNA table has species as rows and sample IDs as columns, with `Species` and `full_tax`
-as annotation columns. This chunk pivots it to long format and filters unassigned rows.
+Each run file has the same structure (species as rows, sample IDs as columns, plus
+`Species` and `full_tax` annotation columns). Runs are pivoted to long format individually
+then row-bound, retaining a `seq_run` tag on every row.
 
 ```{r edna-load}
-# Identify annotation columns vs sample ID columns
 annot_cols <- c(edna_species_col, edna_tax_col)
-sample_cols <- setdiff(names(edna_spp_raw), annot_cols)
 
-edna_long <- edna_spp_raw %>%
-  # Drop rows with no species assignment
-  filter(!is.na(.data[[edna_species_col]]),
-         .data[[edna_species_col]] != "na",
-         .data[[edna_species_col]] != "") %>%
-  # Standardize species name formatting
-  mutate(species = str_to_sentence(str_squish(.data[[edna_species_col]]))) %>%
-  select(species, full_tax = all_of(edna_tax_col), all_of(sample_cols)) %>%
-  pivot_longer(
-    cols      = all_of(sample_cols),
-    names_to  = "sample_id",
-    values_to = "reads"
-  ) %>%
-  filter(reads > 0)
+edna_long_runs <- map(edna_spp_raw_list, function(df) {
+  run_label  <- unique(df$.run)
+  sample_cols <- setdiff(names(df), c(annot_cols, ".run"))
 
-cat("eDNA samples:", n_distinct(edna_long$sample_id), "\n")
-cat("eDNA species (assigned):", n_distinct(edna_long$species), "\n")
-cat("Non-zero read observations:", nrow(edna_long), "\n")
+  df %>%
+    filter(
+      !is.na(.data[[edna_species_col]]),
+      !tolower(str_squish(.data[[edna_species_col]])) %in% c("na", "")
+    ) %>%
+    mutate(species = str_to_sentence(str_squish(.data[[edna_species_col]]))) %>%
+    select(species, full_tax = all_of(edna_tax_col), all_of(sample_cols)) %>%
+    pivot_longer(
+      cols      = all_of(sample_cols),
+      names_to  = "sample_id",
+      values_to = "reads"
+    ) %>%
+    filter(reads > 0) %>%
+    mutate(seq_run = run_label)
+})
+
+edna_long_all <- bind_rows(edna_long_runs)
+
+cat("Total eDNA samples across all runs:", n_distinct(edna_long_all$sample_id), "\n")
+cat("eDNA species (assigned):", n_distinct(edna_long_all$species), "\n")
+cat("Non-zero observations:", nrow(edna_long_all), "\n")
+iwalk(edna_long_runs, ~ cat("  Run", .y, "—",
+                             n_distinct(.x$sample_id), "samples,",
+                             n_distinct(.x$species), "species\n"))
 ```
 
-## 2c. Species Name Harmonization via Lookup Table
+## 2c. Run Normalization & Duplicate Sample Resolution
+
+**Why normalize?** Read depth varies between sequencing runs, so raw read counts are not
+directly comparable across runs. We use Total Sum Scaling (TSS) — dividing each sample's
+reads by its total reads — to convert to within-sample proportions before combining runs.
+Downstream analyses use these normalized values; the heatmaps display them as proportions
+rather than raw counts.
+
+**Why deduplicate?** If the same station × sample_type combination appears in both runs,
+we keep only one representative sample (using the `dedup_strategy` set above) to avoid
+pseudo-replication in the correlation analyses.
+
+```{r run-normalize-dedup}
+# ── Step 1: attach metadata to get station + sample_type per sample ───────────
+meta_clean_pre <- meta_raw %>%
+  rename(
+    sample_id   = all_of(meta_sample_col),   # ReadFile — matches species table columns
+    station     = all_of(meta_station_col),   # TrawlID
+    sample_type = all_of(meta_type_col)       # Sample_type
+  ) %>%
+  # Filter to the target primer(s) if specified
+  { if (!is.null(valid_primers) && meta_primer_col %in% names(.))
+      filter(., .data[[meta_primer_col]] %in% valid_primers)
+    else . } %>%
+  # Filter out controls, mocks, NTCs and rows with invalid station IDs
+  filter(
+    sample_type %in% valid_sample_types,
+    !is.na(station),
+    !tolower(str_squish(station)) %in% tolower(invalid_station_values)
+  )
+
+# Report primer filtering
+if (!is.null(valid_primers) && meta_primer_col %in% names(meta_raw)) {
+  all_primers <- sort(unique(meta_raw[[meta_primer_col]]))
+  cat("Primers in metadata:", paste(all_primers, collapse = ", "), "\n")
+  cat("Primers kept:", paste(valid_primers, collapse = ", "), "\n")
+}
+cat("Metadata rows after filtering controls + primer:", nrow(meta_clean_pre), "\n")
+cat("Sample types retained:", paste(sort(unique(meta_clean_pre$sample_type)), collapse = ", "), "\n")
+cat("Stations:", paste(sort(unique(meta_clean_pre$station)), collapse = ", "), "\n")
+
+# Attach seq_run from metadata if column exists; otherwise use the run tag from the file
+if (meta_run_col %in% names(meta_raw)) {
+  meta_clean_pre <- meta_clean_pre %>%
+    rename(seq_run_meta = all_of(meta_run_col))
+} else {
+  meta_clean_pre <- meta_clean_pre %>% mutate(seq_run_meta = NA_character_)
+}
+
+edna_with_meta <- edna_long_all %>%
+  left_join(meta_clean_pre %>%
+              select(sample_id, station, sample_type, seq_run_meta),
+            by = "sample_id") %>%
+  mutate(seq_run = coalesce(seq_run_meta, seq_run)) %>%
+  select(-seq_run_meta) %>%
+  # Drop any samples that didn't match valid metadata (controls etc.)
+  filter(!is.na(station), !is.na(sample_type))
+
+cat("\neDNA observations after joining metadata:", nrow(edna_with_meta), "\n")
+cat("eDNA samples matched to valid trawl stations:",
+    n_distinct(edna_with_meta$sample_id), "\n")
+
+# ── Step 2: TSS normalization within each sample ──────────────────────────────
+# IMPORTANT: compute sample_totals from edna_with_meta (after metadata join),
+# NOT from edna_long_all, because seq_run has been updated via coalesce above
+# and the join key must be consistent. We sum ALL species reads per sample
+# (including those with 0 reads that were filtered out of edna_long_all),
+# so we use the full per-sample total = sum of reads that DID make it in.
+# This is a valid TSS denominator for the detected species subset.
+sample_totals <- edna_with_meta %>%
+  group_by(sample_id, seq_run) %>%
+  summarise(total_reads = sum(reads, na.rm = TRUE), .groups = "drop")
+
+edna_norm <- edna_with_meta %>%
+  left_join(sample_totals, by = c("sample_id", "seq_run")) %>%
+  mutate(reads_tss = reads / total_reads)   # proportion within sample
+
+cat("TSS normalization check — NA total_reads:", sum(is.na(edna_norm$total_reads)), "\n")
+
+# ── Step 3: identify duplicate station × sample_type combos across runs ──────
+# A "duplicate" here means the same station × sample_type appears in BOTH runs,
+# meaning multiple INDIVIDUAL samples (replicates within one run are fine and
+# will be averaged later in edna_agg)
+sample_index <- edna_norm %>%
+  distinct(sample_id, station, sample_type, seq_run) %>%
+  filter(!is.na(station), !is.na(sample_type))
+
+# Find station × sample_type groups that span more than one sequencing run
+run_per_group <- sample_index %>%
+  group_by(station, sample_type) %>%
+  summarise(runs_present = list(sort(unique(seq_run))),
+            n_runs = n_distinct(seq_run), .groups = "drop")
+
+dup_groups <- run_per_group %>% filter(n_runs > 1)
+
+if (nrow(dup_groups) == 0) {
+  cat("✓ No station × sample_type combinations span multiple runs.\n")
+  edna_long <- edna_norm
+} else {
+  cat("⚠", nrow(dup_groups),
+      "station × sample_type combinations have samples in >1 run:\n")
+  print(dup_groups %>% select(station, sample_type, n_runs))
+
+  # For each duplicated group, pick one run; keep all replicates within that run
+  if (dedup_strategy == "max_reads") {
+    # For each station × sample_type, sum reads across replicates per run, pick the run
+    # with the highest total library depth
+    run_depth <- sample_index %>%
+      left_join(sample_totals, by = c("sample_id", "seq_run")) %>%
+      group_by(station, sample_type, seq_run) %>%
+      summarise(group_total = sum(total_reads, na.rm = TRUE), .groups = "drop")
+
+    preferred_run_per_group <- run_depth %>%
+      group_by(station, sample_type) %>%
+      slice_max(group_total, n = 1, with_ties = FALSE) %>%
+      ungroup() %>%
+      select(station, sample_type, preferred_run = seq_run)
+
+    cat("\nDeduplication strategy: keeping run with highest total reads per group.\n")
+  } else {
+    preferred_run_per_group <- dup_groups %>%
+      mutate(preferred_run = dedup_strategy) %>%
+      select(station, sample_type, preferred_run)
+    cat("\nDeduplication strategy: preferring run", dedup_strategy, ".\n")
+  }
+
+  # Join preferred run back and filter — non-dup groups keep all their samples
+  edna_long <- edna_norm %>%
+    left_join(preferred_run_per_group, by = c("station", "sample_type")) %>%
+    filter(is.na(preferred_run) | seq_run == preferred_run) %>%
+    select(-preferred_run)
+
+  cat("Samples retained after deduplication:",
+      n_distinct(edna_long$sample_id), "/",
+      n_distinct(edna_norm$sample_id), "\n")
+}
+
+# Summary of run composition after deduplication
+run_summary <- edna_long %>%
+  distinct(sample_id, station, sample_type, seq_run) %>%
+  filter(!is.na(station)) %>%
+  count(seq_run, name = "n_samples")
+cat("\nSamples per sequencing run (post-deduplication):\n")
+print(run_summary)
+```
+
+## 2d. Species Name Harmonization via Lookup Table
 
 The trawl uses common names; the eDNA table uses binomial names. The lookup table
 (`species_types.csv`) bridges them. This chunk adds the binomial key to trawl records
@@ -192,13 +376,15 @@ if (nrow(unmatched_trawl) > 0) {
   cat("✓ All trawl common names matched in lookup table.\n")
 }
 
-# Report eDNA binomials not in lookup (detected but no trawl equivalent expected)
-unmatched_edna <- edna_spp_raw %>%
-  pull(.data[[edna_species_col]]) %>%
-  # Exclude unassigned rows before any transformation
-  keep(~ !is.na(.x) && !tolower(str_squish(.x)) %in% c("na", "")) %>%
-  str_to_sentence() %>% str_squish() %>% unique() %>%
-  setdiff(lookup$species)
+# Report eDNA binomials not in lookup (across all runs)
+all_edna_species <- map(edna_spp_raw_list, ~ {
+  .x %>%
+    pull(.data[[edna_species_col]]) %>%
+    keep(~ !is.na(.x) && !tolower(str_squish(.x)) %in% c("na", "")) %>%
+    str_to_sentence() %>% str_squish()
+}) %>% unlist() %>% unique()
+
+unmatched_edna <- setdiff(all_edna_species, lookup$species)
 cat("\neDNA species not in lookup table (", length(unmatched_edna), "):",
     paste(head(unmatched_edna, 10), collapse = ", "),
     if (length(unmatched_edna) > 10) "..." else "", "\n")
@@ -207,39 +393,33 @@ cat("\neDNA species not in lookup table (", length(unmatched_edna), "):",
 trawl_agg <- trawl_agg %>% filter(!is.na(species))
 ```
 
-## 2d. eDNA — Attach Metadata & Summarize by Station × Type
+## 2e. eDNA — Attach Metadata & Summarize by Station × Type
 
 ```{r edna-meta}
-meta_clean <- meta_raw %>%
-  rename(
-    sample_id   = all_of(meta_sample_col),
-    station     = all_of(meta_station_col),
-    sample_type = all_of(meta_type_col)
-  )
+# Station and sample_type are already attached from the normalization step.
+# Re-use meta_clean_pre for any remaining metadata columns needed.
+meta_clean <- meta_clean_pre   # already renamed in 2c
 
-edna_full <- edna_long %>%
-  left_join(meta_clean, by = "sample_id")
-
-# Warn about any samples in eDNA table not found in metadata
-missing_meta <- setdiff(unique(edna_long$sample_id), meta_clean$sample_id)
+# Warn about samples in eDNA tables with no metadata match
+missing_meta <- setdiff(unique(edna_long_all$sample_id), meta_clean$sample_id)
 if (length(missing_meta) > 0)
   warning("These sample IDs are in the eDNA table but not in metadata: ",
           paste(missing_meta, collapse = ", "))
 
-# Summarize reads per station × sample_type × species
-edna_agg <- edna_full %>%
+# Summarize TSS-normalized reads per station × sample_type × species
+# (using reads_tss so cross-run values are on the same 0–1 proportion scale)
+edna_agg <- edna_long %>%
   filter(!is.na(station), !is.na(sample_type)) %>%
   group_by(station, sample_type, species) %>%
-  summarise(edna_reads = sum(reads, na.rm = TRUE), .groups = "drop")
+  summarise(edna_reads = sum(reads_tss, na.rm = TRUE), .groups = "drop")
 
 cat("eDNA sample types:", paste(sort(unique(edna_agg$sample_type)), collapse = ", "), "\n")
 cat("eDNA stations:", n_distinct(edna_agg$station), "\n")
 ```
 
-## 2e. Join Trawl & eDNA
+## 2f. Join Trawl & eDNA
 
 ```{r join}
-# Paired stations present in both datasets
 shared_stations <- intersect(unique(trawl_agg$station), unique(edna_agg$station))
 cat("Paired stations (trawl ∩ eDNA):", length(shared_stations), "\n")
 
@@ -497,7 +677,7 @@ if (length(both_species) == 0) {
           missing      ~ "",
           is.na(value) ~ "0",
           is_trawl     ~ scales::percent(value, accuracy = 0.1),
-          TRUE         ~ as.character(round(value))
+          TRUE         ~ scales::percent(value, accuracy = 0.01)
         )),
         size = 2.8, color = "grey20"
       ) +
@@ -511,7 +691,7 @@ if (length(both_species) == 0) {
       scale_x_discrete(position = "top") +
       labs(
         title    = paste0("*", sp, "*"),
-        subtitle = "Trawl = relative abundance  |  eDNA = read counts  |  Grey = no eDNA sample",
+        subtitle = "Trawl = relative abundance  |  eDNA = TSS-normalized proportion  |  Grey = no eDNA sample",
         x = NULL, y = "Station"
       ) +
       theme_minimal(base_size = 11) +
@@ -593,7 +773,6 @@ spearman_station_tbl <- function(df, trawl_col, metric_label) {
   df %>%
     filter(!is.na(sample_type), !is.na(.data[[trawl_col]])) %>%
     group_by(station, sample_type) %>%
-    # Need ≥2 complete pairs AND non-zero variance in both vectors
     filter(
       sum(!is.na(.data[[trawl_col]]) & !is.na(edna_reads)) >= 2,
       var(.data[[trawl_col]], na.rm = TRUE) > 0,
@@ -616,20 +795,37 @@ spearman_station <- bind_rows(
   if (has_weight) spearman_station_tbl(paired, "trawl_weight", "Biomass")
 )
 
-ggplot(spearman_station,
-       aes(x = station, y = rho, fill = sample_type, alpha = trawl_metric)) +
-  geom_col(position = position_dodge(0.85), width = 0.8, color = "white") +
-  geom_hline(yintercept = 0, linewidth = 0.4) +
-  scale_fill_brewer(palette = "Set2") +
-  scale_alpha_manual(values = c("Count" = 1, "Biomass" = 0.55)) +
-  facet_wrap(~trawl_metric, ncol = 1) +
-  labs(
-    title = "Station-level Spearman ρ: Trawl vs eDNA",
-    subtitle = "Top = Count  |  Bottom = Biomass  |  Colour = eDNA sample type",
-    x = "Station", y = "Spearman ρ", fill = "Sample type", alpha = "Trawl metric"
-  ) +
-  theme_minimal(base_size = 13) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+if (nrow(spearman_station) == 0) {
+  cat("No station × sample_type groups had sufficient variance for station-level ρ.\n")
+} else {
+  n_metrics <- n_distinct(spearman_station$trawl_metric)
+
+  p <- ggplot(spearman_station,
+              aes(x = station, y = rho, fill = sample_type, alpha = trawl_metric)) +
+    geom_col(position = position_dodge(0.85), width = 0.8, color = "white") +
+    geom_hline(yintercept = 0, linewidth = 0.4) +
+    scale_fill_brewer(palette = "Set2") +
+    scale_alpha_manual(values = c("Count" = 1, "Biomass" = 0.55),
+                       drop = FALSE) +
+    labs(
+      title    = "Station-level Spearman ρ: Trawl vs eDNA",
+      subtitle = if (n_metrics > 1)
+                   "Top = Count  |  Bottom = Biomass  |  Colour = eDNA sample type"
+                 else
+                   paste("Trawl metric:", unique(spearman_station$trawl_metric),
+                         " | Colour = eDNA sample type"),
+      x = "Station", y = "Spearman ρ",
+      fill = "Sample type", alpha = "Trawl metric"
+    ) +
+    theme_minimal(base_size = 13) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+  if (n_metrics > 1) {
+    p <- p + facet_wrap(~trawl_metric, ncol = 1)
+  }
+
+  print(p)
+}
 ```
 
 ---
@@ -639,7 +835,6 @@ ggplot(spearman_station,
 ## 5a. Scatter plots per sample type — Count vs Biomass
 
 ```{r relabund-scatter, fig.height=7}
-# Pivot both trawl relative abundance metrics to long for faceting
 rel_long <- paired %>%
   filter(!is.na(sample_type)) %>%
   select(station, species, sample_type, edna_rel,
@@ -649,24 +844,55 @@ rel_long <- paired %>%
     names_to  = "trawl_metric",
     values_to = "trawl_rel"
   ) %>%
-  filter(!is.na(trawl_rel), (trawl_rel > 0 | edna_rel > 0)) %>%
+  filter(!is.na(trawl_rel), !is.na(edna_rel),
+         (trawl_rel > 0 | edna_rel > 0)) %>%
   mutate(trawl_metric = recode(trawl_metric,
                                "trawl_count_rel"  = "Count",
                                "trawl_weight_rel" = "Biomass"))
 
-ggplot(rel_long, aes(x = trawl_rel, y = edna_rel, color = sample_type)) +
-  geom_point(alpha = 0.5, size = 1.6) +
-  geom_smooth(method = "lm", se = FALSE, linewidth = 0.8) +
-  facet_grid(trawl_metric ~ sample_type) +
-  scale_x_continuous(labels = scales::percent_format(accuracy = 0.1)) +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 0.1)) +
-  scale_color_brewer(palette = "Set2", guide = "none") +
-  labs(
-    title = "Relative Abundance: Trawl vs eDNA",
-    subtitle = "Rows = trawl metric  |  Columns = eDNA sample type",
-    x = "Trawl relative abundance", y = "eDNA relative abundance"
-  ) +
-  theme_bw(base_size = 11)
+if (nrow(rel_long) == 0) {
+  cat("No paired relative abundance data to plot.\n")
+} else {
+  metrics <- unique(rel_long$trawl_metric)
+  types   <- sort(unique(rel_long$sample_type))
+  colors  <- setNames(RColorBrewer::brewer.pal(max(3, length(types)), "Set2")[seq_along(types)],
+                      types)
+
+  # Build one plot per metric × type combination, only where data exist
+  plot_list <- list()
+  for (m in metrics) {
+    for (t in types) {
+      sub <- rel_long %>% filter(trawl_metric == m, sample_type == t)
+      if (nrow(sub) == 0) next
+
+      p_sub <- ggplot(sub, aes(x = trawl_rel, y = edna_rel)) +
+        geom_point(color = colors[t], alpha = 0.6, size = 1.8)
+
+      if (nrow(sub) >= 3) {
+        p_sub <- p_sub +
+          geom_smooth(method = "lm", se = FALSE, color = colors[t], linewidth = 0.8)
+      }
+
+      p_sub <- p_sub +
+        scale_x_continuous(labels = scales::percent_format(accuracy = 0.1)) +
+        scale_y_continuous(labels = scales::percent_format(accuracy = 0.1)) +
+        labs(title = paste0(t, "\n(", m, ")"),
+             x = "Trawl rel. abund.", y = "eDNA rel. abund.") +
+        theme_bw(base_size = 10) +
+        theme(plot.title = element_text(size = 9))
+
+      plot_list[[paste(m, t, sep = "_")]] <- p_sub
+    }
+  }
+
+  if (length(plot_list) > 0) {
+    wrap_plots(plot_list, ncol = length(types)) +
+      plot_annotation(
+        title    = "Relative Abundance: Trawl vs eDNA",
+        subtitle = "Smooth line shown only where ≥3 paired observations exist"
+      )
+  }
+}
 ```
 
 ## 5b. Log-transformed Pearson r — Count vs Biomass
@@ -741,42 +967,59 @@ log_cor %>%
 ## 6a. Kruskal-Wallis + Dunn post-hoc test on ρ values
 
 ```{r kruskal-type}
-# Test whether station-level ρ differs by sample type
-kw_result <- kruskal.test(rho ~ sample_type, data = spearman_station)
-kw_tidy <- tidy(kw_result)
+n_types_kw <- n_distinct(spearman_station$sample_type)
 
-cat("Kruskal-Wallis test: H =", round(kw_tidy$statistic, 3),
-    ", df =", kw_tidy$parameter,
-    ", p =", signif(kw_tidy$p.value, 3), "\n")
-
-# Pairwise Wilcoxon (Dunn-like) if K-W is significant
-if (kw_tidy$p.value < 0.05 && n_distinct(spearman_station$sample_type) >= 2) {
-  pairwise_result <- pairwise.wilcox.test(
-    spearman_station$rho,
-    spearman_station$sample_type,
-    p.adjust.method = "BH"
-  )
-  cat("\nPairwise Wilcoxon (BH-adjusted p-values):\n")
-  print(pairwise_result$p.value)
+if (nrow(spearman_station) == 0 || n_types_kw < 2) {
+  cat("Kruskal-Wallis test requires ≥2 sample types with station-level ρ values.\n",
+      "Only", n_types_kw, "type(s) available after variance filtering — skipping.\n")
 } else {
-  cat("No significant difference among sample types (or <2 types), skipping post-hoc.\n")
+  # Test whether station-level ρ differs by sample type
+  kw_result <- kruskal.test(rho ~ sample_type, data = spearman_station)
+  kw_tidy   <- tidy(kw_result)
+
+  cat("Kruskal-Wallis test: H =", round(kw_tidy$statistic, 3),
+      ", df =", kw_tidy$parameter,
+      ", p =", signif(kw_tidy$p.value, 3), "\n")
+
+  # Pairwise Wilcoxon (Dunn-like) if K-W is significant
+  if (kw_tidy$p.value < 0.05 && n_types_kw >= 2) {
+    pairwise_result <- pairwise.wilcox.test(
+      spearman_station$rho,
+      spearman_station$sample_type,
+      p.adjust.method = "BH"
+    )
+    cat("\nPairwise Wilcoxon (BH-adjusted p-values):\n")
+    print(pairwise_result$p.value)
+  } else {
+    cat("No significant difference among sample types, skipping post-hoc.\n")
+  }
 }
 ```
 
 ## 6b. Boxplot of station-level ρ by sample type
 
 ```{r rho-boxplot, fig.height=5}
-ggplot(spearman_station, aes(x = sample_type, y = rho, fill = sample_type)) +
-  geom_boxplot(outlier.shape = NA, alpha = 0.7, width = 0.5) +
-  geom_jitter(width = 0.15, size = 2.2, alpha = 0.8, color = "grey30") +
-  facet_wrap(~trawl_metric, ncol = 2) +
-  scale_fill_brewer(palette = "Set2", guide = "none") +
-  labs(
-    title = "Station-level Spearman ρ by eDNA Sample Type",
-    subtitle = "Faceted by trawl metric",
-    x = "Sample type", y = "Spearman ρ (trawl vs eDNA)"
-  ) +
-  theme_bw(base_size = 13)
+if (nrow(spearman_station) == 0) {
+  cat("No station-level ρ values available to plot.\n")
+} else {
+  n_metrics <- n_distinct(spearman_station$trawl_metric)
+
+  p <- ggplot(spearman_station, aes(x = sample_type, y = rho, fill = sample_type)) +
+    geom_boxplot(outlier.shape = NA, alpha = 0.7, width = 0.5) +
+    geom_jitter(width = 0.15, size = 2.2, alpha = 0.8, color = "grey30") +
+    scale_fill_brewer(palette = "Set2", guide = "none") +
+    labs(
+      title    = "Station-level Spearman ρ by eDNA Sample Type",
+      subtitle = if (n_metrics > 1) "Faceted by trawl metric" else
+                   paste("Trawl metric:", unique(spearman_station$trawl_metric)),
+      x = "Sample type", y = "Spearman ρ (trawl vs eDNA)"
+    ) +
+    theme_bw(base_size = 13)
+
+  if (n_metrics > 1) p <- p + facet_wrap(~trawl_metric, ncol = 2)
+
+  print(p)
+}
 ```
 
 ## 6c. NMDS ordination — do sample types cluster separately?
