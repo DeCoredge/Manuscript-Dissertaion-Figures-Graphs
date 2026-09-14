@@ -46,8 +46,8 @@ library(broom)
 # ── USER: Update these file paths ────────────────────────────────────────────
 trawl_file       <- "inputs/trawl_taxa_subset.csv"           # Long-format trawl CSV
 edna_spp_files   <- c(                          # One entry per sequencing run —
-  run1 = "inputs/SPECIES_counts_Trawl_CEPH18S_Run1.csv",    #   named with a short run label
-  run2 = "inputs/SPECIES_counts_Trawl_CEPH18S_Run2.csv"     #   UPDATE when correct Run2 file available
+  run1 = "inputs/SPECIES_counts_Trawl_LerayCOI_Run1.csv",    #   named with a short run label
+  run2 = "inputs/SPECIES_counts_Trawl_LerayCOI_Run2.csv"     #   UPDATE when correct Run2 file available
 )
 edna_meta_file   <- "inputs/Metabarcoding_Metadata.csv"     # Sample metadata — must cover ALL runs
 lookup_file      <- "inputs/species_types.csv"              # Common-name ↔ binomial lookup table
@@ -74,7 +74,7 @@ meta_primer_col    <- "Primer"         # Primer/amplicon column in metadata (set
 # Primer(s) to KEEP — only samples sequenced with this primer are used.
 # This prevents mixing amplicons (e.g. CEPH18S + MiFish12S) when the metadata
 # covers multiple primer sets. Set to NULL to keep all primers.
-valid_primers <- c("Ceph18S")          # primer name exactly as it appears in the metadata
+valid_primers <- c("LerayCOI")          # primer name exactly as it appears in the metadata
                                        # Primer column. Set to NULL to skip filter.
 
 # Sample types to KEEP (all others — controls, mocks, NTCs — are excluded)
@@ -111,7 +111,7 @@ pool_strategy <- "max_reads"   # ← "max_reads" or "mean"
 #   "Cephalopod"    — keep only Illex illecebrosus, Doryteuthis pealeii,
 #                     and Bathypolypus arcticus (case-insensitive)
 #   NULL            — no filter; use all species
-taxon_filter <- "Cephalopod"   # ← set to "Fish", "Invertebrate", "Cephalopod", or NULL
+taxon_filter <- "Invertebrate"   # ← set to "Fish", "Invertebrate", "Cephalopod", or NULL
 
 # Species included when taxon_filter == "Cephalopod"
 cephalopod_species <- c("Illex illecebrosus", "Doryteuthis pealeii", "Bathypolypus arcticus")

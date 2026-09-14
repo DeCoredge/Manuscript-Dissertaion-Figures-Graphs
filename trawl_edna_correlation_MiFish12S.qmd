@@ -46,8 +46,8 @@ library(broom)
 # ── USER: Update these file paths ────────────────────────────────────────────
 trawl_file       <- "inputs/trawl_taxa_subset.csv"           # Long-format trawl CSV
 edna_spp_files   <- c(                          # One entry per sequencing run —
-  run1 = "inputs/SPECIES_counts_Trawl_CEPH18s_Run1.csv",    #   named with a short run label
-  run2 = "inputs/SPECIES_counts_Trawl_CEPH18S_Run2.csv"     #   UPDATE when correct Run2 file available
+  run1 = "inputs/SPECIES_counts_Trawl_MiFish12S_Run1.csv",    #   named with a short run label
+  run2 = "inputs/SPECIES_counts_Trawl_MiFish12S_Run2.csv"     #   UPDATE when correct Run2 file available
 )
 edna_meta_file   <- "inputs/Metabarcoding_Metadata.csv"     # Sample metadata — must cover ALL runs
 lookup_file      <- "inputs/species_types.csv"              # Common-name ↔ binomial lookup table
@@ -74,7 +74,7 @@ meta_primer_col    <- "Primer"         # Primer/amplicon column in metadata (set
 # Primer(s) to KEEP — only samples sequenced with this primer are used.
 # This prevents mixing amplicons (e.g. CEPH18S + MiFish12S) when the metadata
 # covers multiple primer sets. Set to NULL to keep all primers.
-valid_primers <- c("Ceph18S")          # primer name exactly as it appears in the metadata
+valid_primers <- c("MiFish12S")          # primer name exactly as it appears in the metadata
                                        # Primer column. Set to NULL to skip filter.
 
 # Sample types to KEEP (all others — controls, mocks, NTCs — are excluded)
@@ -94,6 +94,27 @@ lookup_type_col    <- "Body_Type"      # Body type (Slimy / Crunchy)
 # "run1"      = always prefer run 1
 # "run2"      = always prefer run 2
 dedup_strategy <- "max_reads"
+
+# ── USER: Sample type pooling strategy for Spearman correlations ─────────────
+# How to pool eDNA reads across sample types for the "Pooled" Spearman analysis:
+#   "max_reads"  — per station, keep only the sample_type with the highest total
+#                  read count. Preserves the strongest signal; recommended.
+#   "mean"       — average edna_reads across sample types per station × species.
+#                  Conservative; reduces influence of any single sample type.
+pool_strategy <- "max_reads"   # ← "max_reads" or "mean"
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── USER: Taxon group filter ──────────────────────────────────────────────────
+# Restrict all analyses to one taxonomic group. Options:
+#   "Fish"          — keep only rows where taxon_group == "Fish"
+#   "Invertebrate"  — keep only rows where taxon_group == "Invertebrate"
+#   "Cephalopod"    — keep only Illex illecebrosus, Doryteuthis pealeii,
+#                     and Bathypolypus arcticus (case-insensitive)
+#   NULL            — no filter; use all species
+taxon_filter <- "Fish"   # ← set to "Fish", "Invertebrate", "Cephalopod", or NULL
+
+# Species included when taxon_filter == "Cephalopod"
+cephalopod_species <- c("Illex illecebrosus", "Doryteuthis pealeii", "Bathypolypus arcticus")
 # ─────────────────────────────────────────────────────────────────────────────
 ```
 
@@ -391,6 +412,27 @@ cat("\neDNA species not in lookup table (", length(unmatched_edna), "):",
 
 # Keep only trawl records with a matched binomial
 trawl_agg <- trawl_agg %>% filter(!is.na(species))
+
+# ── Taxon group filter ────────────────────────────────────────────────────────
+if (!is.null(taxon_filter)) {
+  if (taxon_filter == "Cephalopod") {
+    ceph_clean <- str_to_sentence(str_squish(cephalopod_species))
+    trawl_agg  <- trawl_agg %>%
+      filter(str_to_sentence(str_squish(species)) %in% ceph_clean)
+    cat("Taxon filter: Cephalopod —", nrow(trawl_agg), "trawl records retained\n")
+    cat("Species kept:", paste(sort(unique(trawl_agg$species)), collapse = ", "), "\n")
+  } else {
+    trawl_agg <- trawl_agg %>%
+      filter(str_to_sentence(taxon_group) == str_to_sentence(taxon_filter))
+    cat("Taxon filter:", taxon_filter, "—", nrow(trawl_agg), "trawl records retained\n")
+    cat("Species kept:", paste(sort(unique(trawl_agg$species)), collapse = ", "), "\n")
+  }
+} else {
+  cat("No taxon filter applied — all", nrow(trawl_agg), "trawl records retained\n")
+}
+
+# Derive the group label used in plot titles
+taxon_label <- if (is.null(taxon_filter)) "All species" else taxon_filter
 ```
 
 ## 2e. eDNA — Attach Metadata & Summarize by Station × Type
@@ -464,6 +506,66 @@ if (has_count)  both_detected <- both_detected %>% filter(trawl_count  > 0)
 if (has_weight) both_detected <- both_detected %>% filter(trawl_weight > 0)
 
 cat("Species × station pairs detected by both methods:", nrow(both_detected), "\n")
+
+# ── Pooled eDNA: collapse sample_types within each station ───────────────────
+# Used for the pooled Spearman analyses in Section 4.
+if (pool_strategy == "max_reads") {
+  # Per station, find the sample_type with the highest total read count.
+  # Use edna_agg (pre-join) as the source — paired has NAs for stations
+  # where species were only in trawl, which inflates or drops totals.
+  best_type <- edna_agg %>%
+    group_by(station, sample_type) %>%
+    summarise(total_reads = sum(edna_reads, na.rm = TRUE), .groups = "drop") %>%
+    group_by(station) %>%
+    slice_max(total_reads, n = 1, with_ties = FALSE) %>%
+    select(station, best_sample_type = sample_type)
+
+  paired_pooled <- paired %>%
+    left_join(best_type, by = "station") %>%
+    filter(!is.na(best_sample_type), sample_type == best_sample_type) %>%
+    mutate(sample_type = "Pooled (max reads)") %>%
+    select(-best_sample_type) %>%
+    # Recompute relative abundances within each station using only the
+    # selected sample_type's rows (inherited edna_rel was computed across
+    # all types before pooling and may be stale / NaN)
+    group_by(station) %>%
+    mutate(
+      edna_rel = edna_reads / sum(edna_reads, na.rm = TRUE)
+    ) %>%
+    { if (has_count)  mutate(., trawl_count_rel  = trawl_count  / sum(trawl_count,  na.rm = TRUE)) else . } %>%
+    { if (has_weight) mutate(., trawl_weight_rel = trawl_weight / sum(trawl_weight, na.rm = TRUE)) else . } %>%
+    ungroup()
+
+  cat("Pooling strategy: max_reads\n")
+  cat("Stations in pooled dataset:", n_distinct(paired_pooled$station), "\n")
+  best_type %>% arrange(station) %>%
+    { cat("Best sample_type per station:\n"); print(as.data.frame(.)) }
+
+} else if (pool_strategy == "mean") {
+  # Average edna_reads across sample types per station × species
+  trawl_cols_pooled <- paired %>%
+    select(station, species, any_of(c("trawl_count","trawl_weight",
+                                      "trawl_count_rel","trawl_weight_rel",
+                                      "taxon_group","body_type"))) %>%
+    distinct()
+
+  paired_pooled <- paired %>%
+    filter(!is.na(sample_type)) %>%
+    group_by(station, species) %>%
+    summarise(edna_reads = mean(edna_reads, na.rm = TRUE), .groups = "drop") %>%
+    left_join(trawl_cols_pooled, by = c("station","species")) %>%
+    mutate(sample_type = "Pooled (mean)") %>%
+    group_by(station) %>%
+    mutate(
+      edna_rel = edna_reads / sum(edna_reads, na.rm = TRUE)
+    ) %>%
+    { if (has_count)  mutate(., trawl_count_rel  = trawl_count  / sum(trawl_count,  na.rm = TRUE)) else . } %>%
+    { if (has_weight) mutate(., trawl_weight_rel = trawl_weight / sum(trawl_weight, na.rm = TRUE)) else . } %>%
+    ungroup()
+  cat("Pooling strategy: mean\n")
+  cat("Stations in pooled dataset:", n_distinct(paired_pooled$station), "\n")
+}
+# ─────────────────────────────────────────────────────────────────────────────
 ```
 
 ---
@@ -745,8 +847,10 @@ spearman_tbl <- function(df, trawl_col, metric_label) {
 }
 
 spearman_overall <- bind_rows(
-  if (has_count)  spearman_tbl(paired, "trawl_count",  "Count"),
-  if (has_weight) spearman_tbl(paired, "trawl_weight", "Biomass")
+  if (has_count)  spearman_tbl(paired,        "trawl_count",  "Count"),
+  if (has_weight) spearman_tbl(paired,        "trawl_weight", "Biomass"),
+  if (has_count)  spearman_tbl(paired_pooled, "trawl_count",  "Count"),
+  if (has_weight) spearman_tbl(paired_pooled, "trawl_weight", "Biomass")
 ) %>%
   mutate(sig = case_when(
     p_value < 0.001 ~ "***",
@@ -758,7 +862,8 @@ spearman_overall <- bind_rows(
 spearman_overall %>%
   mutate(rho = round(rho, 3), p_value = signif(p_value, 3)) %>%
   arrange(sample_type, trawl_metric) %>%
-  kable(caption = "Spearman ρ: trawl (count & biomass) vs eDNA reads, by sample type",
+  kable(caption = paste("Spearman ρ: trawl vs eDNA reads, by sample type (pooled =",
+                        pool_strategy, ")"),
         col.names = c("Sample Type", "Trawl metric", "N obs.", "ρ", "p-value", "Sig.")) %>%
   kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE) %>%
   collapse_rows(columns = 1, valign = "top")
@@ -791,38 +896,46 @@ spearman_station_tbl <- function(df, trawl_col, metric_label) {
 }
 
 spearman_station <- bind_rows(
-  if (has_count)  spearman_station_tbl(paired, "trawl_count",  "Count"),
-  if (has_weight) spearman_station_tbl(paired, "trawl_weight", "Biomass")
+  if (has_count)  spearman_station_tbl(paired,        "trawl_count",  "Count"),
+  if (has_weight) spearman_station_tbl(paired,        "trawl_weight", "Biomass"),
+  if (has_count)  spearman_station_tbl(paired_pooled, "trawl_count",  "Count"),
+  if (has_weight) spearman_station_tbl(paired_pooled, "trawl_weight", "Biomass")
 )
 
 if (nrow(spearman_station) == 0) {
   cat("No station × sample_type groups had sufficient variance for station-level ρ.\n")
 } else {
-  n_metrics <- n_distinct(spearman_station$trawl_metric)
+  n_metrics  <- n_distinct(spearman_station$trawl_metric)
+  all_types  <- sort(unique(spearman_station$sample_type))
+  pooled_lbl <- unique(paired_pooled$sample_type)
+
+  # Give the pooled level a distinct colour (dark grey) so it stands out
+  n_real   <- length(setdiff(all_types, pooled_lbl))
+  pal_real <- if (n_real > 0)
+    RColorBrewer::brewer.pal(max(3, n_real), "Set2")[seq_len(n_real)] else character(0)
+  type_colors <- setNames(c(pal_real, "#555555"),
+                          c(setdiff(all_types, pooled_lbl), pooled_lbl))
 
   p <- ggplot(spearman_station,
               aes(x = station, y = rho, fill = sample_type, alpha = trawl_metric)) +
     geom_col(position = position_dodge(0.85), width = 0.8, color = "white") +
     geom_hline(yintercept = 0, linewidth = 0.4) +
-    scale_fill_brewer(palette = "Set2") +
-    scale_alpha_manual(values = c("Count" = 1, "Biomass" = 0.55),
-                       drop = FALSE) +
+    scale_fill_manual(values = type_colors) +
+    scale_alpha_manual(values = c("Count" = 1, "Biomass" = 0.55), drop = FALSE) +
     labs(
       title    = "Station-level Spearman ρ: Trawl vs eDNA",
-      subtitle = if (n_metrics > 1)
-                   "Top = Count  |  Bottom = Biomass  |  Colour = eDNA sample type"
-                 else
-                   paste("Trawl metric:", unique(spearman_station$trawl_metric),
-                         " | Colour = eDNA sample type"),
+      subtitle = paste0(
+        if (n_metrics > 1) "Faceted by trawl metric  |  " else
+          paste("Trawl metric:", unique(spearman_station$trawl_metric), " |  "),
+        "Grey = pooled (", pool_strategy, ")"
+      ),
       x = "Station", y = "Spearman ρ",
       fill = "Sample type", alpha = "Trawl metric"
     ) +
     theme_minimal(base_size = 13) +
     theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-  if (n_metrics > 1) {
-    p <- p + facet_wrap(~trawl_metric, ncol = 1)
-  }
+  if (n_metrics > 1) p <- p + facet_wrap(~trawl_metric, ncol = 1)
 
   print(p)
 }
@@ -982,7 +1095,7 @@ if (nrow(spearman_station) == 0 || n_types_kw < 2) {
       ", p =", signif(kw_tidy$p.value, 3), "\n")
 
   # Pairwise Wilcoxon (Dunn-like) if K-W is significant
-  if (kw_tidy$p.value < 0.05 && n_types_kw >= 2) {
+  if (!is.na(kw_tidy$p.value) && kw_tidy$p.value < 0.05 && n_types_kw >= 2) {
     pairwise_result <- pairwise.wilcox.test(
       spearman_station$rho,
       spearman_station$sample_type,
@@ -1082,74 +1195,222 @@ if (nrow(nmds_mat) >= 3) {
 
 ---
 
-# 7. Species Detected by Either Method
+# 7. Trawl Species: Relative Abundance Comparison
 
-This section shows mean relative abundance (trawl) and mean relative abundance (eDNA)
-side by side for all species detected by **either** the trawl or the eDNA survey across
-paired stations. This is more informative than restricting to top trawl species when the
-eDNA primer targets a specific taxonomic group (e.g. cephalopods) that may represent a
-small fraction of trawl catch.
+Mean relative abundance (trawl) and mean relative eDNA read count side by side for all
+species **detected by trawl** across paired stations. Species detected only by eDNA are
+excluded so the x-axis reflects the trawl community composition.
 
 ```{r top-species, fig.height=7}
 # Choose the primary trawl relative abundance metric
 primary_trawl_rel <- if (has_count) "trawl_count_rel" else "trawl_weight_rel"
-primary_label     <- if (has_count) "Trawl (count)"   else "Trawl (biomass)"
+primary_label     <- if (has_count) "Trawl biomass"   else "Trawl biomass"
+trawl_pa_col      <- if (has_count) "trawl_count"     else "trawl_weight"
 
-# All species detected by trawl OR eDNA across paired stations
-focal_sp <- paired %>%
-  filter(!is.na(sample_type)) %>%
-  filter(edna_reads > 0 | .data[[if (has_count) "trawl_count" else "trawl_weight"]] > 0) %>%
+# Species detected by trawl in paired stations (eDNA-only excluded)
+focal_sp <- trawl_agg %>%
+  filter(station %in% unique(paired$station),
+         .data[[trawl_pa_col]] > 0) %>%
   pull(species) %>% unique() %>% sort()
+cat("Trawl species for barplot:", paste(focal_sp, collapse = ", "), "\n")
 
-top_paired <- paired %>%
+# ── Trawl relative abundances (from trawl_agg directly, not paired) ──────────
+# Use trawl_agg so we don't inherit NaN from the full-join's zero-fill logic.
+trawl_rel_col <- if (has_count) "trawl_count" else "trawl_weight"
+trawl_rel_df <- trawl_agg %>%
+  filter(station %in% unique(paired$station), species %in% focal_sp) %>%
+  group_by(station) %>%
+  mutate(trawl_rel = .data[[trawl_rel_col]] /
+           sum(.data[[trawl_rel_col]], na.rm = TRUE)) %>%
+  ungroup() %>%
+  group_by(species) %>%
+  summarise(mean_trawl_rel = mean(trawl_rel, na.rm = TRUE), .groups = "drop")
+
+# ── eDNA relative abundances per sample_type (from paired) ───────────────────
+edna_rel_df <- paired %>%
   filter(species %in% focal_sp, !is.na(sample_type)) %>%
   group_by(species, sample_type) %>%
-  summarise(
-    mean_trawl_rel = mean(.data[[primary_trawl_rel]], na.rm = TRUE),
-    mean_edna_rel  = mean(edna_rel, na.rm = TRUE),
-    .groups = "drop"
-  ) %>%
-  pivot_longer(c(mean_trawl_rel, mean_edna_rel),
-               names_to = "method", values_to = "mean_rel_abund") %>%
-  mutate(method = recode(method,
-                         "mean_trawl_rel" = primary_label,
-                         "mean_edna_rel"  = "eDNA"))
+  summarise(mean_edna_rel = mean(edna_rel, na.rm = TRUE), .groups = "drop")
 
-if (nrow(top_paired) == 0 || n_distinct(top_paired$species) == 0) {
-  cat("No species detected by either method in paired stations.\n")
-} else {
-  n_types <- n_distinct(top_paired$sample_type)
+# ── eDNA relative abundances for pooled ──────────────────────────────────────
+edna_rel_pooled_df <- paired_pooled %>%
+  filter(species %in% focal_sp) %>%
+  group_by(species) %>%
+  summarise(mean_edna_rel = mean(edna_rel, na.rm = TRUE), .groups = "drop")
 
-  p <- ggplot(top_paired,
-              aes(x = reorder(species, mean_rel_abund),
-                  y = mean_rel_abund,
-                  fill = method)) +
-    geom_col(position = position_dodge(0.8), width = 0.7) +
-    scale_fill_manual(values = setNames(c("#4e79a7", "#f28e2b"),
-                                        c(primary_label, "eDNA"))) +
-    scale_y_continuous(labels = scales::percent_format(accuracy = 0.1)) +
-    coord_flip() +
-    labs(
-      title    = "Mean Relative Abundance: All Detected Species",
-      subtitle = "Trawl = relative abundance within station | eDNA = relative reads within station × sample type",
-      x = NULL, y = "Mean relative abundance", fill = "Method"
+# ── Shared plot helper ────────────────────────────────────────────────────────
+make_abund_barplot <- function(df_long, subtitle = NULL) {
+  method_colors <- c(
+    "Trawl biomass"    = "#F08080",
+    "eDNA Read Counts" = "#45B8AC"
+  )
+  sp_order <- df_long %>%
+    filter(method == primary_label) %>%
+    arrange(desc(mean_rel_abund)) %>%
+    pull(species)
+  sp_order <- c(sp_order, setdiff(unique(df_long$species), sp_order))
+
+  df_long <- df_long %>%
+    mutate(species = factor(species, levels = sp_order),
+           mean_rel_abund = ifelse(is.nan(mean_rel_abund), 0, mean_rel_abund))
+
+  ggplot(df_long, aes(x = species, y = mean_rel_abund, fill = method)) +
+    geom_col(position = position_dodge(0.75), width = 0.65) +
+    scale_fill_manual(values = method_colors, name = "Method") +
+    scale_y_continuous(
+      labels = scales::label_number(accuracy = 0.01),
+      expand = expansion(mult = c(0, 0.08))
     ) +
-    theme_bw(base_size = 11) +
-    theme(legend.position = "top")
+    labs(
+      title    = paste(taxon_label, "Species Abundance and Primer Read Count Proportions"),
+      subtitle = subtitle,
+      x        = "Species",
+      y        = "Proportion Abundance Reads"
+    ) +
+    theme_bw(base_size = 12) +
+    theme(
+      plot.title       = element_text(face = "bold", hjust = 0.5, size = 13),
+      plot.subtitle    = element_text(hjust = 0.5, colour = "grey40"),
+      axis.text.x      = element_text(angle = 45, hjust = 1, colour = "purple"),
+      axis.title       = element_text(face = "bold"),
+      legend.position  = "right",
+      legend.title     = element_text(face = "bold"),
+      panel.grid.minor = element_blank()
+    )
+}
+# ─────────────────────────────────────────────────────────────────────────────
 
-  if (n_types > 1) {
-    p <- p + facet_wrap(~sample_type, ncol = 1)
-  } else {
-    p <- p + labs(caption = paste("eDNA sample type:", unique(top_paired$sample_type)))
+if (length(focal_sp) == 0) {
+  cat("No trawl species found in paired stations.\n")
+} else {
+  # One chart per sample_type
+  for (stype in sort(unique(edna_rel_df$sample_type))) {
+    df_long <- trawl_rel_df %>%
+      left_join(edna_rel_df %>% filter(sample_type == stype),
+                by = "species") %>%
+      select(species, mean_trawl_rel, mean_edna_rel) %>%
+      mutate(mean_edna_rel = replace_na(mean_edna_rel, 0)) %>%
+      pivot_longer(c(mean_trawl_rel, mean_edna_rel),
+                   names_to = "method", values_to = "mean_rel_abund") %>%
+      mutate(method = recode(method,
+                             "mean_trawl_rel" = primary_label,
+                             "mean_edna_rel"  = "eDNA Read Counts"))
+
+    n_types  <- n_distinct(edna_rel_df$sample_type)
+    subtitle <- if (n_types > 1) paste("eDNA sample type:", stype) else NULL
+    print(make_abund_barplot(df_long, subtitle))
   }
 
-  print(p)
+  # Pooled chart
+  df_long_pooled <- trawl_rel_df %>%
+    left_join(edna_rel_pooled_df, by = "species") %>%
+    mutate(mean_edna_rel = replace_na(mean_edna_rel, 0)) %>%
+    pivot_longer(c(mean_trawl_rel, mean_edna_rel),
+                 names_to = "method", values_to = "mean_rel_abund") %>%
+    mutate(method = recode(method,
+                           "mean_trawl_rel" = primary_label,
+                           "mean_edna_rel"  = "eDNA Read Counts"))
+
+  print(make_abund_barplot(
+    df_long_pooled,
+    subtitle = paste0("Pooled eDNA — best sample type per station (", pool_strategy, ")")
+  ))
 }
 ```
 
 ---
 
-# 8. Session Info
+# 8. Relative Read Count Export
+
+Relative eDNA read counts (TSS-normalized) for the target taxon group, restricted to
+species in the trawl list, exported as two CSVs:
+
+- **By station** (`_by_station.csv`): one row per `trawl_id × sample_type × species`
+- **Trawl-wide** (`_trawl_wide.csv`): mean (± SD) relative read count across stations,
+  one row per `sample_type × species`, with counts of how many stations had that
+  sample type and how many detected the species
+
+```{r export-relreads}
+# Species that are in the trawl lookup for this taxon filter
+trawl_species_set <- unique(trawl_agg$species)
+
+output_dir <- if (exists("path_analysis")) path_analysis else "."
+base_name  <- paste0("relative_reads_", tolower(gsub(" ", "_", taxon_label)), "_trawl_species")
+
+# ── 1. By-station CSV: one row per trawl_id × sample_type × species ──────────
+relreads_by_station <- edna_long %>%
+  filter(!is.na(station), !is.na(sample_type)) %>%
+  filter(str_to_sentence(str_squish(species)) %in%
+           str_to_sentence(str_squish(trawl_species_set))) %>%
+  group_by(station, sample_type, species) %>%
+  summarise(rel_read_count = sum(reads_tss, na.rm = TRUE), .groups = "drop") %>%
+  rename(trawl_id = station) %>%
+  arrange(trawl_id, sample_type, species)
+
+cat("By-station export — rows:", nrow(relreads_by_station),
+    "| stations:", n_distinct(relreads_by_station$trawl_id),
+    "| sample types:", n_distinct(relreads_by_station$sample_type),
+    "| species:", n_distinct(relreads_by_station$species), "\n")
+
+fname_station <- paste0(base_name, "_by_station.csv")
+write_csv(relreads_by_station, file.path(output_dir, fname_station))
+cat("Exported:", fname_station, "\n\n")
+
+# ── 2. Trawl-wide CSV: mean relative read count across stations,
+#       one row per sample_type × species ─────────────────────────────────────
+# Mean is taken over stations where the species was observed (rel_read_count > 0
+# OR the station had that sample_type present, depending on preference).
+# Here we average only over stations that had that sample_type, filling
+# absent species with 0 so absent detections count against the mean.
+all_combos <- relreads_by_station %>%
+  distinct(trawl_id, sample_type) %>%
+  crossing(species = unique(relreads_by_station$species))
+
+relreads_wide <- all_combos %>%
+  left_join(relreads_by_station, by = c("trawl_id", "sample_type", "species")) %>%
+  mutate(rel_read_count = replace_na(rel_read_count, 0)) %>%
+  group_by(sample_type, species) %>%
+  summarise(
+    n_stations          = n(),
+    n_stations_detected = sum(rel_read_count > 0),
+    mean_rel_read_count = mean(rel_read_count),
+    sd_rel_read_count   = sd(rel_read_count),
+    .groups = "drop"
+  ) %>%
+  arrange(sample_type, desc(mean_rel_read_count))
+
+cat("Trawl-wide export — rows:", nrow(relreads_wide),
+    "| sample types:", n_distinct(relreads_wide$sample_type),
+    "| species:", n_distinct(relreads_wide$species), "\n")
+
+fname_wide <- paste0(base_name, "_trawl_wide.csv")
+write_csv(relreads_wide, file.path(output_dir, fname_wide))
+cat("Exported:", fname_wide, "\n")
+
+# ── Preview tables ────────────────────────────────────────────────────────────
+relreads_by_station %>%
+  mutate(rel_read_count = round(rel_read_count, 5)) %>%
+  head(15) %>%
+  kable(caption = paste("By-station relative eDNA read counts —", taxon_label,
+                        "(first 15 rows)"),
+        col.names = c("Trawl ID", "Sample type", "Species", "Rel. read count")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
+                full_width = FALSE) %>%
+  print()
+
+relreads_wide %>%
+  mutate(across(c(mean_rel_read_count, sd_rel_read_count), ~ round(.x, 5))) %>%
+  kable(caption = paste("Trawl-wide mean relative eDNA read counts —", taxon_label),
+        col.names = c("Sample type", "Species", "N stations",
+                      "N detected", "Mean rel. count", "SD")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
+                full_width = FALSE) %>%
+  print()
+```
+
+---
+
+# 9. Session Info
 
 ```{r session-info}
 sessionInfo()
