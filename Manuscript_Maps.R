@@ -83,12 +83,11 @@ trawl_df <- data.frame(id = c("A", "B", "C", "D", "E", "F", "G", "H", "I", "J",
 
 base_map_zoomed <- base_map +
   geom_point(data = trawl_df, aes(x = Longitude, y = Latitude, 
-            color = type), size = 5) +
-  scale_colour_manual(values = c("purple")) +
-  coord_sf(xlim = c(-70, -67), ylim = c(43.2, 44.8))
+            color = type), shape = 21, color = "black", size = 3, stroke = 1.5) + # Enables separate color (border) and fill, border thickness, and detrmines points' size
+  scale_color_manual(values = c("sample site" = "darkviolet"), 
+                    name = "type") + coord_sf(xlim = c(-70, -67),
+                    ylim = c(43.2, 44.8))
 
 #View New zoomed in Map
 base_map_zoomed
 print(base_map_zoomed)
-
-
