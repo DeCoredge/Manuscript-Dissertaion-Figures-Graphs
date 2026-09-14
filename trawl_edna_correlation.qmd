@@ -46,7 +46,7 @@ library(broom)
 # ── USER: Update these file paths ────────────────────────────────────────────
 trawl_file       <- "inputs/trawl_taxa_subset.csv"           # Long-format trawl CSV
 edna_spp_files   <- c(                          # One entry per sequencing run —
-  run1 = "inputs/SPECIES_counts_Trawl_CEPH18S_Run1.csv",    #   named with a short run label
+  run1 = "inputs/SPECIES_counts_Trawl_CEPH18s_Run1.csv",    #   named with a short run label
   run2 = "inputs/SPECIES_counts_Trawl_CEPH18S_Run2.csv"     #   UPDATE when correct Run2 file available
 )
 edna_meta_file   <- "inputs/Metabarcoding_Metadata.csv"     # Sample metadata — must cover ALL runs
@@ -1254,7 +1254,8 @@ make_abund_barplot <- function(df_long, subtitle = NULL) {
     mutate(species = factor(species, levels = sp_order),
            mean_rel_abund = ifelse(is.nan(mean_rel_abund), 0, mean_rel_abund))
 
-  ggplot(df_long, aes(x = species, y = mean_rel_abund, fill = method)) +
+  ggplot(df_long, aes(x = species, y = mean_rel_abund,
+                      fill = factor(method, levels = c(primary_label, "eDNA Read Counts")))) +
     geom_col(position = position_dodge(0.75), width = 0.65) +
     scale_fill_manual(values = method_colors, name = "Method") +
     scale_y_continuous(
@@ -1331,53 +1332,132 @@ species in the trawl list, exported as two CSVs:
   sample type and how many detected the species
 
 ```{r export-relreads}
-# Species that are in the trawl lookup for this taxon filter
-trawl_species_set <- unique(trawl_agg$species)
-
 output_dir <- if (exists("path_analysis")) path_analysis else "."
 base_name  <- paste0("relative_reads_", tolower(gsub(" ", "_", taxon_label)), "_trawl_species")
 
-# ── 1. By-station CSV: one row per trawl_id × sample_type × species ──────────
-relreads_by_station <- edna_long %>%
+# ── Trawl base table: all trawl species with non-zero catch ──────────────────
+# Relative abundance computed per station (within paired stations only,
+# consistent with the analyses above).
+paired_stations <- unique(paired$station)
+
+trawl_base <- trawl_agg %>%
+  filter(station %in% paired_stations) %>%
+  { if (has_count)  filter(., trawl_count  > 0) else
+    if (has_weight) filter(., trawl_weight > 0) else . } %>%
+  group_by(station) %>%
+  mutate(
+    trawl_count_rel  = if (has_count)  trawl_count  / sum(trawl_count,  na.rm = TRUE) else NA_real_,
+    trawl_weight_rel = if (has_weight) trawl_weight / sum(trawl_weight, na.rm = TRUE) else NA_real_
+  ) %>%
+  ungroup() %>%
+  select(trawl_id = station, species,
+         any_of(c("trawl_count", "trawl_weight",
+                  "trawl_count_rel", "trawl_weight_rel")))
+
+trawl_species_set <- unique(trawl_base$species)
+
+# ── eDNA by station: trawl species only ──────────────────────────────────────
+edna_by_station <- edna_long %>%
+  filter(!is.na(station), !is.na(sample_type),
+         station %in% paired_stations) %>%
+  filter(str_to_sentence(str_squish(species)) %in%
+           str_to_sentence(str_squish(trawl_species_set))) %>%
+  group_by(trawl_id = station, sample_type, species) %>%
+  # Mean across PCR replicates within station × sample_type
+  summarise(edna_rel_read_count = mean(reads_tss, na.rm = TRUE), .groups = "drop")
+
+# ── 1. By-station CSV ─────────────────────────────────────────────────────────
+# One row per trawl_id × species. Trawl columns first, then one eDNA column
+# per sample_type (pivoted wide) plus a best_rel_reads column from paired_pooled.
+
+# Pivot eDNA sample types wide — column names: <sample_type>_rel_reads
+edna_wide_station <- edna_by_station %>%
+  mutate(col = paste0(tolower(gsub("[ /]", "_", sample_type)), "_rel_reads")) %>%
+  select(trawl_id, species, col, edna_rel_read_count) %>%
+  pivot_wider(names_from = col, values_from = edna_rel_read_count, values_fill = 0)
+
+# Best sample_type per station from paired_pooled
+edna_best_station <- paired_pooled %>%
   filter(!is.na(station), !is.na(sample_type)) %>%
   filter(str_to_sentence(str_squish(species)) %in%
            str_to_sentence(str_squish(trawl_species_set))) %>%
-  group_by(station, sample_type, species) %>%
-  summarise(rel_read_count = sum(reads_tss, na.rm = TRUE), .groups = "drop") %>%
-  rename(trawl_id = station) %>%
-  arrange(trawl_id, sample_type, species)
+  group_by(trawl_id = station, species) %>%
+  # Mean across replicates (guards against any residual duplication)
+  summarise(best_rel_reads = mean(edna_rel, na.rm = TRUE), .groups = "drop")
+
+relreads_by_station <- trawl_base %>%
+  left_join(edna_wide_station,  by = c("trawl_id", "species")) %>%
+  left_join(edna_best_station,  by = c("trawl_id", "species")) %>%
+  # Fill 0 for any eDNA columns where species was not detected
+  mutate(across(ends_with("_rel_reads"), ~ replace_na(.x, 0))) %>%
+  arrange(trawl_id, species)
 
 cat("By-station export — rows:", nrow(relreads_by_station),
     "| stations:", n_distinct(relreads_by_station$trawl_id),
-    "| sample types:", n_distinct(relreads_by_station$sample_type),
     "| species:", n_distinct(relreads_by_station$species), "\n")
+cat("Columns:", paste(colnames(relreads_by_station), collapse = ", "), "\n\n")
 
 fname_station <- paste0(base_name, "_by_station.csv")
 write_csv(relreads_by_station, file.path(output_dir, fname_station))
 cat("Exported:", fname_station, "\n\n")
 
-# ── 2. Trawl-wide CSV: mean relative read count across stations,
-#       one row per sample_type × species ─────────────────────────────────────
-# Mean is taken over stations where the species was observed (rel_read_count > 0
-# OR the station had that sample_type present, depending on preference).
-# Here we average only over stations that had that sample_type, filling
-# absent species with 0 so absent detections count against the mean.
-all_combos <- relreads_by_station %>%
-  distinct(trawl_id, sample_type) %>%
-  crossing(species = unique(relreads_by_station$species))
+# ── 2. Trawl-wide CSV ─────────────────────────────────────────────────────────
+# Mean (± SD) across paired stations for both trawl and eDNA, one row per
+# sample_type × species. Zero-filled for stations where the species was not
+# detected (but trawl_count was > 0 at other stations).
+all_trawl_stations <- unique(trawl_base$trawl_id)
+all_edna_stypes    <- unique(edna_by_station$sample_type)
 
-relreads_wide <- all_combos %>%
-  left_join(relreads_by_station, by = c("trawl_id", "sample_type", "species")) %>%
-  mutate(rel_read_count = replace_na(rel_read_count, 0)) %>%
+# Trawl side: mean over all paired stations (0 where species absent from trawl)
+trawl_wide_base <- crossing(
+    trawl_id = all_trawl_stations,
+    species  = trawl_species_set
+  ) %>%
+  left_join(trawl_base, by = c("trawl_id", "species")) %>%
+  mutate(across(any_of(c("trawl_count","trawl_weight",
+                          "trawl_count_rel","trawl_weight_rel")),
+                ~ replace_na(.x, 0))) %>%
+  group_by(species) %>%
+  summarise(
+    n_trawl_stations         = n(),
+    n_trawl_stations_nonzero = sum(
+      coalesce(trawl_count_rel, 0) > 0 | coalesce(trawl_weight_rel, 0) > 0),
+    across(any_of(c("trawl_count","trawl_weight",
+                    "trawl_count_rel","trawl_weight_rel")),
+           list(mean = ~ mean(.x, na.rm = TRUE),
+                sd   = ~ sd(.x,   na.rm = TRUE)),
+           .names = "{.fn}_{.col}"),
+    .groups = "drop"
+  )
+
+# eDNA side: mean over stations × sample_type combos
+edna_wide_base <- crossing(
+    trawl_id   = all_trawl_stations,
+    sample_type = all_edna_stypes,
+    species     = trawl_species_set
+  ) %>%
+  left_join(edna_by_station, by = c("trawl_id", "sample_type", "species")) %>%
+  mutate(edna_rel_read_count = replace_na(edna_rel_read_count, 0)) %>%
   group_by(sample_type, species) %>%
   summarise(
-    n_stations          = n(),
-    n_stations_detected = sum(rel_read_count > 0),
-    mean_rel_read_count = mean(rel_read_count),
-    sd_rel_read_count   = sd(rel_read_count),
+    n_edna_stations          = n(),
+    n_edna_stations_detected = sum(edna_rel_read_count > 0),
+    mean_edna_rel_read_count = mean(edna_rel_read_count),
+    sd_edna_rel_read_count   = sd(edna_rel_read_count),
     .groups = "drop"
-  ) %>%
-  arrange(sample_type, desc(mean_rel_read_count))
+  )
+
+relreads_wide <- edna_wide_base %>%
+  left_join(trawl_wide_base, by = "species") %>%
+  select(sample_type, species,
+         n_trawl_stations, n_trawl_stations_nonzero,
+         any_of(c("mean_trawl_count", "sd_trawl_count",
+                  "mean_trawl_weight", "sd_trawl_weight",
+                  "mean_trawl_count_rel", "sd_trawl_count_rel",
+                  "mean_trawl_weight_rel", "sd_trawl_weight_rel")),
+         n_edna_stations, n_edna_stations_detected,
+         mean_edna_rel_read_count, sd_edna_rel_read_count) %>%
+  arrange(sample_type, desc(mean_edna_rel_read_count))
 
 cat("Trawl-wide export — rows:", nrow(relreads_wide),
     "| sample types:", n_distinct(relreads_wide$sample_type),
@@ -1389,20 +1469,18 @@ cat("Exported:", fname_wide, "\n")
 
 # ── Preview tables ────────────────────────────────────────────────────────────
 relreads_by_station %>%
-  mutate(rel_read_count = round(rel_read_count, 5)) %>%
+  mutate(across(where(is.numeric), ~ round(.x, 5))) %>%
   head(15) %>%
-  kable(caption = paste("By-station relative eDNA read counts —", taxon_label,
-                        "(first 15 rows)"),
-        col.names = c("Trawl ID", "Sample type", "Species", "Rel. read count")) %>%
+  kable(caption = paste("By-station: trawl catch + eDNA relative reads —",
+                        taxon_label, "(first 15 rows)")) %>%
   kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
                 full_width = FALSE) %>%
   print()
 
 relreads_wide %>%
-  mutate(across(c(mean_rel_read_count, sd_rel_read_count), ~ round(.x, 5))) %>%
-  kable(caption = paste("Trawl-wide mean relative eDNA read counts —", taxon_label),
-        col.names = c("Sample type", "Species", "N stations",
-                      "N detected", "Mean rel. count", "SD")) %>%
+  mutate(across(where(is.numeric), ~ round(.x, 5))) %>%
+  kable(caption = paste("Trawl-wide means: trawl catch + eDNA relative reads —",
+                        taxon_label)) %>%
   kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
                 full_width = FALSE) %>%
   print()
