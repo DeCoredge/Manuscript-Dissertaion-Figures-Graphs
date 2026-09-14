@@ -1,0 +1,22 @@
+trawl_id,sample_type,species,rel_read_count
+FL23018,Bottom_metaprobe,Doryteuthis pealeii,0.006923203929718378
+FL23018,Bottom_metaprobe,Illex illecebrosus,1.9930767960702815
+FL23018,Slush,Illex illecebrosus,1
+FL23018,Top_metaprobe,Doryteuthis pealeii,0.015808524783925536
+FL23018,Top_metaprobe,Illex illecebrosus,0.9841914752160744
+FL23019,Bottom_metaprobe,Illex illecebrosus,3
+FL23019,Slush,Illex illecebrosus,1
+FL23019,Top_metaprobe,Doryteuthis pealeii,0.5654217752041926
+FL23019,Top_metaprobe,Illex illecebrosus,2.4345782247958074
+FL23020,Bottom_metaprobe,Illex illecebrosus,1
+FL23020,Top_metaprobe,Illex illecebrosus,2
+FL23072,Bottom_metaprobe,Doryteuthis pealeii,0.9999736654991704
+FL23072,Bottom_metaprobe,Illex illecebrosus,2.6334500829536777e-5
+FL23075,Top_metaprobe,Illex illecebrosus,1
+SP23094,Bottom_metaprobe,Doryteuthis pealeii,1
+SP23094,Bottom_metaprobe,Illex illecebrosus,1
+SP23094,Top_metaprobe,Bathypolypus arcticus,0.0027732731674069895
+SP23094,Top_metaprobe,Doryteuthis pealeii,0.9972267268325931
+SP23096,Bottom_metaprobe,Doryteuthis pealeii,1.1666088247486286
+SP23096,Bottom_metaprobe,Illex illecebrosus,0.8333911752513714
+SP23096,Top_metaprobe,Illex illecebrosus,2

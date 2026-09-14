@@ -1,0 +1,17 @@
+trawl_id,sample_type,species,rel_read_count
+FL23018,Bottom_metaprobe,Illex illecebrosus,9.558401835213153e-5
+FL23018,Bottom_metaprobe,Pontophilus norvegicus,0.0010340073529411765
+FL23018,Slush,Illex illecebrosus,2.6603704565860797e-4
+FL23018,Top_metaprobe,Ophiuroidea,4.8348106365834006e-4
+FL23019,Slush,Ophiuroidea,8.455765775288025e-5
+FL23019,Top_metaprobe,Pennatulacea,2.1563765431391506e-4
+FL23019,Top_metaprobe,Pontophilus norvegicus,0.0035601556191734566
+FL23075,Bottom_metaprobe,Homarus americanus,2.2041482069254338e-4
+FL23075,Bottom_metaprobe,Ophiuroidea,4.408296413850867e-5
+FL23075,Bottom_metaprobe,Pandalus montagui,0.07310280898625426
+FL23075,Bottom_metaprobe,Pennatulacea,8.155348365624104e-4
+FL23075,Slush,Homarus americanus,0.01056910569105691
+SP23018,Top_metaprobe,Ctenophora,2.0494803103498756e-4
+SP23088,Bottom_metaprobe,Pandalus montagui,0.006392499467291711
+SP23088,Top_metaprobe,Ctenophora,0.0015109000647528599
+SP23094,Top_metaprobe,Ophiuroidea,0.005653851935246307
