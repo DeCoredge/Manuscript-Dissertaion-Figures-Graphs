@@ -82,10 +82,9 @@ trawl_df <- data.frame(id = c("A", "B", "C", "D", "E", "F", "G", "H", "I", "J",
 #Plot the points on the map w/ the scale of the map fixed to have the coordinate points more visible
 
 base_map_zoomed <- base_map +
-  geom_point(data = trawl_df, aes(x = Longitude, y = Latitude, 
-            color = type), shape = 21, color = "black", size = 3, stroke = 1.5) + # Enables separate color (border) and fill, border thickness, and detrmines points' size
-  scale_color_manual(values = c("sample site" = "darkviolet"), 
-                    name = "type") + coord_sf(xlim = c(-70, -67),
+  geom_point(data = trawl_df, aes(x = Longitude, y = Latitude), 
+             fill = "yellow", shape = 21, color = "black", size = 3, stroke = 1.5) + # Enables separate color (border) and fill, border thickness, and detrmines points' size
+            coord_sf(xlim = c(-70, -67),
                     ylim = c(43.2, 44.8))
 
 #View New zoomed in Map
