@@ -20,17 +20,20 @@ edna_MiFish_model <- glm(Abundance ~ 1, data = edna_data,
 edna_MiFish_model_02 <- glm(Abundance ~ MiFish + Temperature + 
   Starting_Depth + End_Depth, data = edna_data, family = "poisson", na.action = na.omit)
 
+
 # View GLM summaries
 summary(edna_MiFish_model)
 summary(edna_MiFish_model_02)
+
 
 # Generate the linear scale plot with dynamic model prediction curves
 plot(edna_data$Abundance ~ edna_data$MiFish + 
   edna_data$Temperature + edna_data$Starting_Depth + edna_data$End_Depth, 
   xlab = "MiFish12S Read Count", ylab = "Total Biomass", 
      main = "Fish biomass across all trawls ~ MiFish12S linear regression model")
-abline(edna_MiFish_model, col="green3", lwd=2)
-abline(edna_MiFish_model_02, col="purple", lwd=2)
+lines(edna_MiFish_model, col="green3", lwd=2)
+lines(edna_MiFish_model_02, col="purple", lwd=2)
+
 
 # Generate smooth sequence for predictable curves
 preds_x <- seq(min(edna_data$MiFish, na.rm = TRUE), max(edna_data$MiFish, 
@@ -50,7 +53,7 @@ pred_y_model01 <- predict(edna_MiFish_model, newdata = predict_df, type = "respo
 pred_y_model02 <- predict(edna_MiFish_model_02, newdata = predict_df, type = "response")
 
 # Draw curves for the graphs
-lines(preds_x, preds_y_model01, col = "red", lwd = 2)
+lines(preds_x, preds_y_mode101, col = "red", lwd = 2)
 lines(preds_x, preds_y_model02, col = "darkcyan", lwd = 2)
 
 # 5. Log-log linear regression model creation & visualization
