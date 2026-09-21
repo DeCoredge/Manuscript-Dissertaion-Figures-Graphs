@@ -4,22 +4,30 @@ setwd("C:/Users/DeCorey Bolton Jr/Documents/GitHub/Manuscript-Dissertaion-Figure
 
 #Perform a Poisson Regression GLM using the abundance proportion of Fish species to their read counts across all trawls in csv.
 edna_data<- read.csv("relative_reads_fish_trawl_species_trawl_wide.csv", header = TRUE)
-edna_data$Abundance <- round(edna_data$mean_trawl_count) 
+edna_data$Abundance <- round(edna_data$mean_trawl_count)
 edna_data$MiFish <- edna_data$mean_edna_rel_read_count
 edna_data$species <- as.factor(edna_data$species)
+
+# Correctly extract columns containing special characters
+edna_data$Starting_Depth <- round(edna_data$Starting_Depth.m.)
+edna_data$End_Depth      <- round(edna_data$End_Depth.m.)
+edna_data$Temperature    <- edna_data$Bottom_Water_Temperature.C..
 
 #Fit data into Poisson Regression GLMs (dropping NA values automatically)
 edna_MiFish_model <- glm(Abundance ~ 1, data = edna_data,
       family = "poisson", na.action = na.omit)
-edna_MiFish_model_02 <- glm(Abundance ~ MiFish, 
-      data = edna_data, family = "poisson", na.action = na.omit)
+
+edna_MiFish_model_02 <- glm(Abundance ~ MiFish + Temperature + 
+  Starting_Depth + End_Depth, data = edna_data, family = "poisson", na.action = na.omit)
 
 # View GLM summaries
 summary(edna_MiFish_model)
 summary(edna_MiFish_model_02)
 
 # Generate the linear scale plot with dynamic model prediction curves
-plot(edna_data$Abundance ~ edna_data$MiFish, xlab = "MiFish12S Read Count",
+plot(edna_data$Abundance ~ edna_data$MiFish + 
+  edna_data$Bottom_Water_Temperature.C.. + edna_data$Starting_Depth.m.
+  + edna_data$End_Depth.m., xlab = "MiFish12S Read Count",
      ylab = "Total Biomass", 
      main = "Fish biomass across all trawls ~ MiFish12S linear regression model")
 abline(edna_MiFish_model, col="green3", lwd=2)
@@ -28,6 +36,16 @@ abline(edna_MiFish_model_02, col="purple", lwd=2)
 # Generate smooth sequence for predictable curves
 preds_x <- seq(min(edna_data$MiFish, na.rm = TRUE), max(edna_data$MiFish, 
       na.rm = TRUE), length.out = 100)
+
+#Provided mean constant values for cofactors so model_02 can compute predictions
+mean_temp <- mean(edna_data$Temperature, na.rm = TRUE)
+mean_start <- mean(edna_data$Starting_Depth, na.rm = TRUE)
+mean_end <- mean(edna_data$End_Depth, na.rm = TRUE)
+
+# Create a dataframe for predicting values
+predict_df <- data.frame( MiFish = preds_x, Temperature = mean_temp,
+             Starting_Depth = mean_start, End_Depth = mean_end)
+
 
 # Predict values back onto response scale (type = "response")
 preds_y_m1 <- predict(edna_MiFish_model, newdata = data.frame(MiFish = preds_x), type = "response")
@@ -280,3 +298,138 @@ plot(log10(edna_data$Abundance + 0.1) ~ log10(edna_data$Ceph18S + 0.001),
      ylab = "log10(Total Abundance)", 
      main = "Cephalopod biomass by Station ~ Ceph18S Log-linear regression model Scale Exploration",
      pch = 16, col = "black")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#Perform a Multiplicative factor log-Poisson Regression GLM using the abundance proportion of all Invert. species to their read counts, and to their body type in csv.
+edna_data_02<- read.csv("Leray_Abundance_Poisson.csv", header = TRUE)
+edna_data_02$Abundance <- edna_data_02$Abundance
+edna_data_02$Leray <- edna_data_02$Leray
+edna_data_02$Body_Type <-edna_data_02$Body_Type
+
+#Replace N/A in csv dataset table.
+edna_data_02<- replace(edna_data_02, is.na(edna_data_02), "")
+
+#Fix any dataframe formating issues
+edna_data_02$Species <- as.factor(edna_data_02$Species)
+edna_data_02$Body_Type <- as.factor(edna_data_02$Body_Type)
+
+#Fit data into Poisson Regression GLMs.
+edna_Leray_model <- glm(Abundance ~ 1, data= edna_data_02, family = "poisson")
+edna_Leray_model_02 <- glm(Abundance ~ Leray*Body_Type, data= edna_data_02,
+                           family = "poisson")
+
+#View GLMs & Explore model fits and independent variables signifance
+summary(edna_Leray_model)
+summary(edna_Leray_model_02)
+
+# Add the model prediction to the plot
+plot(edna_data_02$Leray ~ edna_data_02$Abundance, xlab = "Total Abundance",
+     ylab = "Multiplicative Leray Read Count",  
+     main = "Invertebrate abundance ~ Leray read counts multiplicative linear regression model")
+abline(edna_Leray_model, col="green", lwd=2)
+abline(edna_Leray_model_02, col="purple", lwd=2)
+
+# Add the model prediction to the plot
+plot(log10(edna_data_02$Leray) ~ log10(edna_data_02$Abundance), xlab = "Total Abundance",
+     ylab = "Multiplicative Leray Read Count", 
+     main = "Invertebrate abundance ~ Leray read counts multiplicative log-linear regression model")
+abline(a=0, b=1) # one to one line
+
+#Perform a Additive factor log-Poisson Regression GLM using the abundance proportion of all Invert. species to their read counts, and to their body type in csv.
+edna_data_02<- read.csv("Leray_Abundance_Poisson.csv", header = TRUE)
+edna_data_02$Abundance <- edna_data_02$Abundance
+edna_data_02$Leray <- edna_data_02$Leray
+edna_data_02$Body_Type <-edna_data_02$Body_Type
+
+#Replace N/A in csv dataset table.
+edna_data_02<- replace(edna_data_02, is.na(edna_data_02), "")
+
+#Fix any dataframe formating issues
+edna_data_02$Species <- as.factor(edna_data_02$Species)
+edna_data_02$Body_Type <- as.factor(edna_data_02$Body_Type)
+
+#Fit data into Poisson Regression GLMs.
+edna_Leray_model <- glm(Abundance ~ 1, data= edna_data_02, family = "poisson")
+edna_Leray_model_02 <- glm(Abundance ~ Leray+Body_Type, data= edna_data_02,
+                           family = "poisson")
+
+#View GLMs & Explore model fits and independent variables signifance
+summary(edna_Leray_model)
+summary(edna_Leray_model_02)
+
+# Add the model prediction to the plot
+plot(edna_data_02$Leray ~ edna_data_02$Abundance, xlab = "Total Abundance",
+     ylab = "Additive Leray Read Count", 
+     main = "Invertebrate abundance ~ Leray read counts additive linear regression model")
+abline(edna_Leray_model, col="green", lwd=2)
+abline(edna_Leray_model_02, col="purple", lwd=2)
+
+# Add the model prediction to the plot
+plot(log10(edna_data_02$Leray) ~ log10(edna_data_02$Abundance),  xlab = "Total Abundance",
+     ylab = "Additive Leray Read Count", 
+     main = "Invertebrate abundance ~ Leray read counts additive log-linear regression model")
+abline(a=0, b=1) # one to one line
+
+
+#Perform a Poisson Regression GLM using the abundance proportion of cephalopod species to their read counts in csv.
+edna_data_03<- read.csv("Ceph18s_Abundance_Poisson.csv", header = TRUE)
+edna_data_03$Abundance <- edna_data_03$Abundance
+edna_data_03$Ceph18s <- edna_data_03$Ceph18s
+
+#Replace N/A in csv dataset table.
+edna_data_03<- replace(edna_data_03, is.na(edna_data_03), "")
+
+#Fix any dataframe formating issues
+edna_data_03$Species <- as.factor(edna_data_03$Species)
+
+#Fit data into Poisson Regression GLMs.
+edna_Ceph18s_model <- glm(Abundance ~ 1, data= edna_data_03, family = "poisson")
+edna_Ceph18s_model_02 <- glm(Abundance ~ Ceph18s, data= edna_data_03,
+                             family = "poisson")
+
+#View GLMs & Explore model fits and independent variables signifance
+summary(edna_Ceph18s_model)
+summary(edna_Ceph18s_model_02)
+
+# Add the model prediction to the plot
+plot(edna_data_03$Ceph18s ~ edna_data_03$Abundance, xlab = "Total Abundance",
+     ylab = "Ceph18S Read Count", 
+     main = "Cephalopod abundance ~ Ceph18s read counts linear regression model")
+abline(edna_Ceph18s_model, col="green", lwd=2)
+abline(edna_Ceph18s_model_02, col="purple", lwd=2)
+
+# Add the model prediction to the plot
+plot(log10(edna_data_03$Ceph18s) ~ log10(edna_data_03$Abundance), xlab = "Total Abundance",
+     ylab = "Ceph18S Read Count", 
+     main = "Cephalopod abundance ~ Ceph18s read counts log-linear regression model")
+abline(a=0, b=1) # one to one line
