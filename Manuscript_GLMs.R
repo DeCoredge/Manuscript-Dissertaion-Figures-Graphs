@@ -26,9 +26,8 @@ summary(edna_MiFish_model_02)
 
 # Generate the linear scale plot with dynamic model prediction curves
 plot(edna_data$Abundance ~ edna_data$MiFish + 
-  edna_data$Bottom_Water_Temperature.C.. + edna_data$Starting_Depth.m.
-  + edna_data$End_Depth.m., xlab = "MiFish12S Read Count",
-     ylab = "Total Biomass", 
+  edna_data$Temperature + edna_data$Starting_Depth + edna_data$End_Depth, 
+  xlab = "MiFish12S Read Count", ylab = "Total Biomass", 
      main = "Fish biomass across all trawls ~ MiFish12S linear regression model")
 abline(edna_MiFish_model, col="green3", lwd=2)
 abline(edna_MiFish_model_02, col="purple", lwd=2)
@@ -46,14 +45,13 @@ mean_end <- mean(edna_data$End_Depth, na.rm = TRUE)
 predict_df <- data.frame( MiFish = preds_x, Temperature = mean_temp,
              Starting_Depth = mean_start, End_Depth = mean_end)
 
-
-# Predict values back onto response scale (type = "response")
-preds_y_m1 <- predict(edna_MiFish_model, newdata = data.frame(MiFish = preds_x), type = "response")
-preds_y_m2 <- predict(edna_MiFish_model_02, newdata = data.frame(MiFish = preds_x), type = "response")
+# Calculate predictions from both models (using response scale for poisson count data)
+pred_y_model01 <- predict(edna_MiFish_model, newdata = predict_df, type = "response")
+pred_y_model02 <- predict(edna_MiFish_model_02, newdata = predict_df, type = "response")
 
 # Draw curves for the graphs
-lines(preds_x, preds_y_m1, col = "red", lwd = 2)
-lines(preds_x, preds_y_m2, col = "darkcyan", lwd = 2)
+lines(preds_x, preds_y_model01, col = "red", lwd = 2)
+lines(preds_x, preds_y_model02, col = "darkcyan", lwd = 2)
 
 # 5. Log-log linear regression model creation & visualization
 # Adding small constant (e.g., 0.001) protects against log(0) mathematically undefined errors
@@ -63,6 +61,8 @@ plot(log10(edna_data$Abundance + 0.1) ~ log10(edna_data$MiFish + 0.001),
      ylab = "log10(Total Abundance)", 
      main = "Fish biomass across all trawls ~ MiFish12S Log-linear regression model Scale Exploration",
      pch = 16, col = "black")
+
+
 
 #Perform a Poisson Regression GLM using the abundance proportion of Fish species to their read counts by station in csv.
 edna_data<- read.csv("relative_reads_fish_trawl_species_by_station.csv", header = TRUE)
