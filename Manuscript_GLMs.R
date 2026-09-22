@@ -7,6 +7,7 @@ edna_data<- read.csv("relative_reads_fish_trawl_species_trawl_wide.csv", header 
 edna_data$Abundance <- round(edna_data$mean_trawl_count)
 edna_data$MiFish <- edna_data$mean_edna_rel_read_count
 edna_data$species <- as.factor(edna_data$species)
+edna_data$Temperature <- as.factor(edna_data$Bottom_Water_Temperature.C..)
 
 # Correctly extract columns containing special characters
 edna_data$Starting_Depth <- round(edna_data$Starting_Depth.m.)
@@ -14,47 +15,28 @@ edna_data$End_Depth      <- round(edna_data$End_Depth.m.)
 edna_data$Temperature    <- edna_data$Bottom_Water_Temperature.C..
 
 #Fit data into Poisson Regression GLMs (dropping NA values automatically)
-edna_MiFish_model <- glm(Abundance ~ 1, data = edna_data,
-      family = "poisson", na.action = na.omit)
+edna_MiFish_full_model <- glm(Abundance ~ MiFish, data = edna_data, family = "poisson", na.action = na.omit)
+edna_MiFish_backward_model <- step(edna_MiFish_full_model, direction = "backward")
+summary(edna_MiFish_backward_model)
 
-edna_MiFish_model_02 <- glm(Abundance ~ MiFish + Temperature + 
-  Starting_Depth + End_Depth, data = edna_data, family = "poisson", na.action = na.omit)
-
-
-# View GLM summaries
-summary(edna_MiFish_model)
-summary(edna_MiFish_model_02)
-
+#View GLM model summary
+summary(edna_MiFish_full_model)
 
 # Generate the linear scale plot with dynamic model prediction curves
-plot(edna_data$Abundance ~ edna_data$MiFish + 
-  edna_data$Temperature + edna_data$Starting_Depth + edna_data$End_Depth, 
+plot(edna_data$Abundance ~ edna_data$MiFish, 
   xlab = "MiFish12S Read Count", ylab = "Total Biomass", 
      main = "Fish biomass across all trawls ~ MiFish12S linear regression model")
-lines(edna_MiFish_model, col="green3", lwd=2)
-lines(edna_MiFish_model_02, col="purple", lwd=2)
-
+abline(edna_MiFish_full_model, col="green3", lwd=2)
 
 # Generate smooth sequence for predictable curves
 preds_x <- seq(min(edna_data$MiFish, na.rm = TRUE), max(edna_data$MiFish, 
       na.rm = TRUE), length.out = 100)
 
-#Provided mean constant values for cofactors so model_02 can compute predictions
-mean_temp <- mean(edna_data$Temperature, na.rm = TRUE)
-mean_start <- mean(edna_data$Starting_Depth, na.rm = TRUE)
-mean_end <- mean(edna_data$End_Depth, na.rm = TRUE)
-
-# Create a dataframe for predicting values
-predict_df <- data.frame( MiFish = preds_x, Temperature = mean_temp,
-             Starting_Depth = mean_start, End_Depth = mean_end)
-
 # Calculate predictions from both models (using response scale for poisson count data)
-pred_y_model01 <- predict(edna_MiFish_model, newdata = predict_df, type = "response")
-pred_y_model02 <- predict(edna_MiFish_model_02, newdata = predict_df, type = "response")
+pred_y_model01 <- predict(edna_MiFish_full_model, data.frame(MiFish = preds_x), type = "response")
 
 # Draw curves for the graphs
-lines(preds_x, preds_y_mode101, col = "red", lwd = 2)
-lines(preds_x, preds_y_model02, col = "darkcyan", lwd = 2)
+lines(preds_x, pred_y_model01, col = "red", lwd = 2)
 
 # 5. Log-log linear regression model creation & visualization
 # Adding small constant (e.g., 0.001) protects against log(0) mathematically undefined errors
@@ -73,34 +55,45 @@ edna_data$Abundance <- round(edna_data$trawl_count)
 edna_data$MiFish <- edna_data$best_rel_reads
 edna_data$species <- as.factor(edna_data$species)
 
-#Fit data into Poisson Regression GLMs (dropping NA values automatically)
-edna_MiFish_model <- glm(Abundance ~ 1, data = edna_data,
-                         family = "poisson", na.action = na.omit)
-edna_MiFish_model_02 <- glm(Abundance ~ MiFish, 
-                            data = edna_data, family = "poisson", na.action = na.omit)
 
-# View GLM summaries
-summary(edna_MiFish_model)
-summary(edna_MiFish_model_02)
+# Correctly extract columns containing special characters
+edna_data$Mean_Depth <- round(edna_data$Mean_Depth.m.)
+edna_data$Temperature <- edna_data$Bottom_Water_Temperature.C..
+
+#Fit data into Poisson Regression GLMs (dropping NA values automatically)
+edna_MiFish_full_model <- glm(Abundance ~ MiFish + Temperature + Mean_Depth,
+                data = edna_data, family = "poisson", na.action = na.omit)
+
+#Perform a backwards selction GLM to eliminate unnecessary cofactors
+edna_MiFish_backward_model <- step(edna_MiFish_full_model, direction = "backward")
+
+summary(edna_MiFish_backward_model)
+
+#View GLM model summary
+summary(edna_MiFish_full_model)
+
 
 # Generate the linear scale plot with dynamic model prediction curves
 plot(edna_data$Abundance ~ edna_data$MiFish, xlab = "MiFish12S Read Count",
      ylab = "Total Biomass", 
      main = "Fish biomass by Station ~ MiFish12S linear regression model")
-abline(edna_MiFish_model, col="green3", lwd=2)
-abline(edna_MiFish_model_02, col="purple", lwd=2)
+abline(edna_MiFish_full_model, col="purple", lwd=2)
 
 # Generate smooth sequence for predictable curves
 preds_x <- seq(min(edna_data$MiFish, na.rm = TRUE), max(edna_data$MiFish, 
-                                                        na.rm = TRUE), length.out = 100)
+                                   na.rm = TRUE), length.out = 100)
+
+# Create evaluation data frames matching model variables (holding covariates at their mean value)
+new_data_frame <- data.frame(
+  MiFish = preds_x,
+  Temperature = mean(edna_data$Temperature, na.rm = TRUE),
+  Mean_Depth = mean(edna_data$Mean_Depth, na.rm = TRUE))
 
 # Predict values back onto response scale (type = "response")
-preds_y_m1 <- predict(edna_MiFish_model, newdata = data.frame(MiFish = preds_x), type = "response")
-preds_y_m2 <- predict(edna_MiFish_model_02, newdata = data.frame(MiFish = preds_x), type = "response")
+preds_y_m1 <- predict(edna_MiFish_full_model, newdata = new_data_frame, type = "response")
 
-# Draw curves for the graphs
+#Draw curves for the graphs
 lines(preds_x, preds_y_m1, col = "red", lwd = 2)
-lines(preds_x, preds_y_m2, col = "darkcyan", lwd = 2)
 
 # 5. Log-log linear regression model creation & visualization
 # Adding small constant (e.g., 0.001) protects against log(0) mathematically undefined errors
