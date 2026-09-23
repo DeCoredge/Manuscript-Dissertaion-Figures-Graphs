@@ -28,7 +28,7 @@ plot(edna_data$Biomass ~ edna_data$MiFish * edna_data$sample_type,
      xlab = "MiFish12S Read Count", ylab = "Total Biomass", 
   main = "Fish biomass across all trawls ~ MiFish12S linear regression model", 
   ylim = c(0,25))
-abline(edna_MiFish_full_model, col="green3", lwd=2)
+lines(edna_MiFish_full_model, col="green3", lwd=2)
 
 # Generate smooth sequence for predictable curves
 preds_x <- seq(min(edna_data$MiFish, edna_data$sample_type, na.rm = TRUE), max(edna_data$MiFish, edna_data$sample_type, 
@@ -87,18 +87,17 @@ rm(list = ls())
 
 
 #Perform a Poisson Regression GLM using the abundance proportion of Fish species to their read counts by each station in csv.
-edna_data<- read.csv("relative_reads_fish_trawl_species_by_station.csv", header = TRUE)
-edna_data$Abundance <- round(edna_data$trawl_count) 
+edna_data<- read.csv("FL23018_relative_reads_fish_trawl_species.csv", header = TRUE)
+edna_data$Biomass <- round(edna_data$trawl_weight) 
 edna_data$MiFish <- edna_data$best_rel_reads
 edna_data$species <- as.factor(edna_data$species)
-
 
 # Correctly extract columns containing special characters
 edna_data$Mean_Depth <- round(edna_data$Mean_Depth.m.)
 edna_data$Temperature <- edna_data$Bottom_Water_Temperature.C..
 
 #Fit data into Poisson Regression GLMs (dropping NA values automatically)
-edna_MiFish_full_model <- glm(Abundance ~ MiFish + Temperature + Mean_Depth,
+edna_MiFish_full_model <- glm(Biomass ~ MiFish * Temperature * Mean_Depth,
                 data = edna_data, family = "poisson", na.action = na.omit)
 
 #Perform a backwards selction GLM to eliminate unnecessary cofactors
@@ -111,11 +110,12 @@ summary(edna_MiFish_full_model)
 
 
 # Generate the linear scale plot with dynamic model prediction curves
-plot(edna_data$Abundance ~ edna_data$MiFish, xlab = "MiFish12S Read Count",
-     ylab = "Total Biomass", 
-     main = "Fish biomass by Station ~ MiFish12S linear regression model", 
+plot(edna_data$Biomass ~ edna_data$MiFish * edna_data$Temperature * edna_data$Mean_Depth,
+     xlab = "MiFish12S Read Count", ylab = "Total Biomass", 
+     main = "Fish biomass across all trawls ~ MiFish12S linear regression model", 
      ylim = c(0,25))
-abline(edna_MiFish_full_model, col="purple", lwd=2)
+lines(edna_MiFish_full_model, col="purple", lwd=2)
+
 
 # Generate smooth sequence for predictable curves
 preds_x <- seq(min(edna_data$MiFish, na.rm = TRUE), max(edna_data$MiFish, 
@@ -136,11 +136,32 @@ lines(preds_x, preds_y_m1, col = "red", lwd = 2)
 # 5. Log-log linear regression model creation & visualization
 # Adding small constant (e.g., 0.001) protects against log(0) mathematically undefined errors
 
-plot(log10(edna_data$Abundance + 0.1) ~ log10(edna_data$MiFish + 0.001),
+plot(log10(edna_data$Biomass + 0.1) ~ log10(edna_data$MiFish + 0.001),
      xlab = "log10(MiFish12S read counts)", 
-     ylab = "log10(Total Abundance)", 
+     ylab = "log10(Total Biomass)", 
      main = "Fish biomass by Station ~ MiFish12S Log-linear regression model Scale Exploration",
      pch = 16, col = "black")
+
+
+# Correlation Testing (Biomass across all Trawls vs MiFish eDNA Read Counts)
+# ---------------------------------------------------------
+
+# 1. Pearson Correlation Test (Evaluates linear relationship strength)
+pearson_result <- cor.test(edna_data$Biomass, edna_data$MiFish, 
+                           method = "pearson")
+
+print("--- PEARSON CORRELATION RESULTS ---")
+print(pearson_result)
+
+
+# 2. Spearman Rank Correlation Test (Evaluates non-linear/monotonic relationship)
+# Recommended for skewed biomass counts and proportional eDNA reads
+spearman_result <- cor.test(edna_data$Biomass, edna_data$MiFish, 
+                            method = "spearman",
+                            exact = FALSE) # ADD THIS LINE to silence the ties warning
+
+print("--- SPEARMAN CORRELATION RESULTS ---")
+print(spearman_result)
 
 
 rm(list = ls())
