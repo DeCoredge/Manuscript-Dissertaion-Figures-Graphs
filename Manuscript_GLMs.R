@@ -9,7 +9,7 @@ edna_data$MiFish <- edna_data$mean_edna_rel_read_count
 
 #Keep ONLY rows from one specific sample type (e.g., Bottom_metaprobe)
 # Makes each species only appears exactly once in the model dataset
-edna_filtered <- subset(edna_data, sample_type == "Bottom_metaprobe")
+edna_filtered <- subset(edna_data, sample_type == "Top_metaprobe")
 edna_filtered$species <- as.factor(edna_filtered$species)
 
 #Run the Poisson GLM on the single-entry dataset
@@ -19,7 +19,7 @@ summary(full_model_filtered)
 # Generate the linear scale plot with dynamic model prediction curves
 plot(edna_filtered$Biomass ~ edna_filtered$MiFish,
      xlab = "MiFish12S Read Count", ylab = "Total Biomass", 
-  main = "Fish biomass across all trawls by sample type ~ MiFish12S linear regression model", 
+  main = "Fish biomass across all trawls by sample type (Top Metaprobe) ~ MiFish12S linear regression model", 
   ylim = c(0,25))
 abline(full_model_filtered, col="green3", lwd=2)
 
@@ -39,7 +39,7 @@ lines(preds_x, pred_y_model01, col = "red", lwd = 2)
 plot(log10(edna_filtered$Biomass + 0.1) ~ log10(edna_filtered$MiFish + 0.001),
      xlab = "log10(MiFish12S read counts)", 
      ylab = "log10(Total Biomass)", 
-     main = "Fish biomass across all trawls by sample type ~ MiFish12S Log-linear regression model Scale Exploration",
+     main = "Fish biomass across all trawls by sample type (Top Metaprobe) ~ MiFish12S Log-linear regression model Scale Exploration",
      pch = 16)
 
 
@@ -75,7 +75,8 @@ edna_data<- read.csv("", header = TRUE)
 edna_data$Biomass <- round(edna_data$trawl_weight) 
 edna_data$MiFish <- edna_data$best_rel_reads
 edna_data$species <- as.factor(edna_data$species)
-edna_data$Temperature <- as.factor(edna_data$Bottom_Water_Temperature.C..)
+edna_data$Temperature <- round(edna_data$Bottom_Water_Temperature.C..)
+edna_data$Depth <- round(edna_data$Mean_Depth.m.)
 
 # Correctly extract columns containing special characters
 edna_data$Mean_Depth <- round(edna_data$Mean_Depth.m.)
@@ -159,7 +160,7 @@ edna_data$Leray <- edna_data$mean_edna_rel_read_count
 
 #Keep ONLY rows from one specific sample type (e.g., Bottom_metaprobe)
 # Makes each species only appears exactly once in the model dataset
-edna_filtered <- subset(edna_data, sample_type == "Bottom_metaprobe")
+edna_filtered <- subset(edna_data, sample_type == "Top_metaprobe")
 edna_filtered$species <- as.factor(edna_filtered$species)
 
 #Run the Poisson GLM on the single-entry dataset
@@ -169,7 +170,7 @@ summary(full_model_filtered)
 # Generate the linear scale plot with dynamic model prediction curves
 plot(edna_filtered$Biomass ~ edna_filtered$Leray,
      xlab = "Leray COI Read Counts", ylab = "Total Biomass", 
-     main = "Invertebrate biomass across all trawls by sample type ~ Leray COI linear regression model", 
+     main = "Invertebrate biomass across all trawls by sample type (Top Metaprobe) ~ Leray COI linear regression model", 
      ylim = c(0,25))
 abline(full_model_filtered, col="green3", lwd=2)
 
@@ -189,7 +190,7 @@ lines(preds_x, pred_y_model01, col = "red", lwd = 2)
 plot(log10(edna_filtered$Biomass + 0.1) ~ log10(edna_filtered$Leray + 0.001),
      xlab = "log10(Leray COI read counts)", 
      ylab = "log10(Total Biomass)", 
-     main = "Invertebrate biomass across all trawls ~ Leray COI Log-linear regression model Scale Exploration",
+     main = "Invertebrate biomass across all trawls by sample type (Top Metaprobe) ~ Leray COI Log-linear regression model Scale Exploration",
      pch = 16)
 
 
@@ -219,21 +220,21 @@ by(edna_data, edna_data$sample_type, function(subsample) {
 
 rm(list = ls())
 
-
-
 #Perform a Poisson Regression GLM using the abundance proportion of Invertebrate species to their read counts by each station in csv.
-edna_data<- read.csv("", header = TRUE)
-edna_data$Abundance <- round(edna_data$trawl_count) 
+edna_data<- read.csv("FL23019_relative_reads_invertebrate_trawl_species_by_station.csv", header = TRUE)
+edna_data$Biomass <- round(edna_data$trawl_weight) 
 edna_data$Leray <- edna_data$best_rel_reads
 edna_data$species <- as.factor(edna_data$species)
 edna_data$Body_Type <- as.factor(edna_data$Body_Type)
+edna_data$Temperature <- round(edna_data$Bottom_Water_Temperature.C..)
+edna_data$Depth <- round(edna_data$Mean_Depth.m.)
 
 # Correctly extract columns containing special characters
 edna_data$Mean_Depth <- round(edna_data$Mean_Depth.m.)
 edna_data$Temperature <- edna_data$Bottom_Water_Temperature.C..
 
 #Fit data into Poisson Regression GLMs (dropping NA values automatically)
-edna_Leray_full_model <- glm(Abundance ~ Leray * Body_Type + Temperature,
+edna_Leray_full_model <- glm(Biomass ~ Leray * Body_Type + Temperature,
                               data = edna_data, family = "poisson", na.action = na.omit)
 
 #Perform a backwards selction GLM to eliminate unnecessary cofactors
@@ -246,7 +247,7 @@ summary(edna_Leray_full_model)
 
 
 # Generate the linear scale plot with dynamic model prediction curves
-plot(edna_data$Abundance ~ edna_data$Leray, xlab = "Leray COI Read Count",
+plot(edna_data$Biomass ~ edna_data$Leray, xlab = "Leray COI Read Count",
      ylab = "Total Biomass", 
      main = "Invertebrate biomass by Station ~ Leray COI linear regression model")
 abline(edna_Leray_full_model, col="purple", lwd=2)
@@ -271,7 +272,7 @@ lines(preds_x, preds_y_m1, col = "red", lwd = 2)
 # 5. Log-log linear regression model creation & visualization
 # Adding small constant (e.g., 0.001) protects against log(0) mathematically undefined errors
 
-plot(log10(edna_data$Abundance + 0.1) ~ log10(edna_data$Leray + 0.001),
+plot(log10(edna_data$Biomass + 0.1) ~ log10(edna_data$Leray + 0.001),
      xlab = "log10(Leray COI read counts)", 
      ylab = "log10(Total Abundance)", 
      main = "Invertebrate biomass by Station ~ Leray COI Log-linear regression model Scale Exploration",
@@ -280,6 +281,28 @@ plot(log10(edna_data$Abundance + 0.1) ~ log10(edna_data$Leray + 0.001),
 
 rm(list = ls())
 
+# Correlation Testing (Biomass across all Trawls vs MiFish eDNA Read Counts)
+# ---------------------------------------------------------
+
+# 1. Pearson Correlation Test (Evaluates linear relationship strength)
+pearson_result <- cor.test(edna_data$Biomass, edna_data$Leray, 
+                           method = "pearson")
+
+print("--- PEARSON CORRELATION RESULTS ---")
+print(pearson_result)
+
+
+# 2. Spearman Rank Correlation Test (Evaluates non-linear/monotonic relationship)
+# Recommended for skewed biomass counts and proportional eDNA reads
+spearman_result <- cor.test(edna_data$Biomass, edna_data$Leray, 
+                            method = "spearman",
+                            exact = FALSE) # ADD THIS LINE to silence the ties warning
+
+print("--- SPEARMAN CORRELATION RESULTS ---")
+print(spearman_result)
+
+
+rm(list = ls())
 
 #Perform a Poisson Regression GLM using the abundance proportion of Cephalopod species to their read counts across all trawls by sample type in csv.
 edna_data<- read.csv("relative_reads_cephalopod_trawl_species_trawl_wide.csv", header = TRUE)
