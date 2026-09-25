@@ -1,9 +1,0 @@
-trawl_id,species,trawl_count,trawl_weight,trawl_count_rel,trawl_weight_rel,bottom_metaprobe_rel_reads,slush_rel_reads,top_metaprobe_rel_reads,best_rel_reads
-FL23018,Illex illecebrosus,3,0.56,1,1,0.9965383980351408,1,0.9841914752160744,0.9965383980351408
-FL23019,Illex illecebrosus,2,0.43,1,1,1,1,0.8115260749319357,1
-FL23020,Illex illecebrosus,2,0.28,1,1,1,0,1,1
-FL23072,Bathypolypus arcticus,1,0.01,1,1,0,0,0,0
-FL23075,Bathypolypus arcticus,1,0.004,0.5,0.05405405405405405,0,0,0,0
-FL23075,Doryteuthis pealeii,1,0.07,0.5,0.9459459459459459,0,0,0,0
-SP23094,Doryteuthis pealeii,2,0.03,1,1,1,0,0.9972267268325931,0.5
-SP23096,Doryteuthis pealeii,3,0.18,1,1,0.5833044123743143,0,0,0.5833044123743143
