@@ -52,8 +52,8 @@ MiFish_log_linear_plot <- ggplot(edna_data, aes(x = mean_edna_rel_read_count, y 
     name = "Collection Method",
     breaks = c("Bottom_metaprobe", "Slush", "Top_metaprobe"), # The 'breaks' argument identifies the exact text string currently in your CSV file.
     labels = c("Bottom Metaprobe", "Slush", "Top Metaprobe")) + # The 'labels' argument replaces them with whatever custom names you want.
-  labs(title = "Fish Biomass ~ MiFish12s Read counts Log-Linear Relationship",
-    x = "Mean MiFish12s Read Counts",
+  labs(title = "Fish Biomass ~ MiFish12s Mean Relative Read counts Log-Linear Relationship",
+    x = "MiFish12s Mean Relative Read Counts",
     y = "Mean Fish Biomass (Log10 Scale)",
     color = "Sample Type" ) + theme_minimal() + theme(plot.title = element_text(face = "bold", size = 14),
     axis.title = element_text(face = "bold"))
@@ -225,8 +225,8 @@ Leray_log_linear_plot <- ggplot(edna_data, aes(x = mean_edna_rel_read_count, y =
     name = "Collection Method",
     breaks = c("Bottom_metaprobe", "Slush", "Top_metaprobe"), # The 'breaks' argument identifies the exact text string currently in your CSV file.
     labels = c("Bottom Metaprobe", "Slush", "Top Metaprobe")) + # The 'labels' argument replaces them with whatever custom names you want.
-  labs(title = "Invertebrate Biomass ~ Leray COI Read counts Log-Linear Relationship",
-       x = "Mean Leray COI Read Counts",
+  labs(title = "Invertebrate Biomass ~ Leray COI Mean Relative Read counts Log-Linear Relationship",
+       x = "Leray COI Mean Relative Read Counts",
        y = "Mean Invertebrate Biomass (Log10 Scale)",
        color = "Sample Type" ) + theme_minimal() + theme(plot.title = element_text(face = "bold", size = 14),
                                                          axis.title = element_text(face = "bold"))
@@ -395,8 +395,8 @@ Ceph18s_log_linear_plot <- ggplot(edna_data, aes(x = mean_edna_rel_read_count, y
     name = "Collection Method",
     breaks = c("Bottom_metaprobe", "Slush", "Top_metaprobe"), # The 'breaks' argument identifies the exact text string currently in your CSV file.
     labels = c("Bottom Metaprobe", "Slush", "Top Metaprobe")) + # The 'labels' argument replaces them with whatever custom names you want.
-  labs(title = "Cephalopod Biomass ~ Ceph18s Read counts Log-Linear Relationship",
-       x = "Mean Ceph18s Read Counts",
+  labs(title = "Cephalopod Biomass ~ Ceph18s Mean Relative Read counts Log-Linear Relationship",
+       x = "Ceph18s Mean Relative Read Counts",
        y = "Mean Cephalopod Biomass (Log10 Scale)",
        color = "Sample Type" ) + theme_minimal() + theme(plot.title = element_text(face = "bold", size = 14),
                                                          axis.title = element_text(face = "bold"))
