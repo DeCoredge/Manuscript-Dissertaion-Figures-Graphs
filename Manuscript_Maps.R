@@ -53,10 +53,11 @@ base_map <- ggplot() +
                        name = "Depth (m)") +
   geom_sf(data = world, fill = "#EADEC9", color = "black") + # Add coastline
   geom_contour(data = gom_bathy_df, aes(x = x, y = y, z = z), breaks = c(0, -100, -200), color = "darkgray", linetype = "dashed") + # Add bathymetric contours
-  new_scale_fill() + geom_point(data = trawl_data, 
-    aes(x = Start_Longitude, y = Start_Latitude, fill = Season),
-    shape = 21, color = "black", size = 3.5, stroke = 1.2) +
-  scale_fill_manual(values = c("Fall" = "orange", "Spring" = "cyan"), # Colorblind-friendly options
+  new_scale_fill() + geom_jitter(data = trawl_data, # CHANGED: Replaced geom_point with geom_jitter to shift overlapping sites horizontally
+      aes(x = Start_Longitude, y = Start_Latitude, fill = Season),
+   shape = 21, color = "black", size = 3.5, stroke = 1.2,
+              width = 0.095, height = 0) +
+  scale_fill_manual(values = c("Fall" = "orange", "Spring" = "lightgrey"), # Colorblind-friendly options and 77 at the end = ~46% transparent
              name = "Trawl Season") +
   coord_sf(xlim = c(lon1, lon2), ylim = c(lat1, lat2), expand = FALSE) +
   labs(title = "Paired eDNA ~ ME-NH Inshore Trawl Sample Sites",
@@ -69,7 +70,7 @@ base_map # check to make sure that the base map looks alright
 
 #Plot the points on the map w/ the scale of the map fixed to have the coordinate points more visible
 base_map_zoomed <- base_map +
-  coord_sf(xlim = c(-70, -67), ylim = c(43.2, 44.8), expand = FALSE)
+  coord_sf(xlim = c(-70.5, -67), ylim = c(43.2, 44.8), expand = FALSE)
 
 #View New zoomed in Map
 base_map_zoomed
