@@ -2,64 +2,93 @@ rm(list = ls())
 
 setwd("C:/Users/DeCorey Bolton Jr/Documents/GitHub/Manuscript-Dissertaion-Figures-Graphs")
 
-#Perform a Poisson Regression GLM using the abundance proportion of Fish species to their read counts across all trawls by each sample type.
-edna_data<- read.csv("relative_reads_fish_trawl_species_trawl_wide.csv", header = TRUE)
-edna_data$Biomass <- round(edna_data$mean_trawl_weight)
-edna_data$MiFish <- edna_data$mean_edna_rel_read_count
-
-#Keep ONLY rows from one specific sample type (e.g., Bottom_metaprobe)
-# Makes each species only appears exactly once in the model dataset
-edna_filtered <- subset(edna_data, sample_type == "Top_metaprobe")
-edna_filtered$species <- as.factor(edna_filtered$species)
-
-#Run the Poisson GLM on the single-entry dataset
-full_model_filtered <- glm(Biomass ~ MiFish, data = edna_filtered, family = "poisson")
-summary(full_model_filtered)
-
-# Generate the linear scale plot with dynamic model prediction curves
-plot(edna_filtered$Biomass ~ edna_filtered$MiFish,
-     xlab = "MiFish12S Read Count", ylab = "Total Biomass", 
-  main = "Fish biomass across all trawls by sample type (Top Metaprobe) ~ MiFish12S linear regression model", 
-  ylim = c(0,25))
-abline(full_model_filtered, col="green3", lwd=2)
-
-# Generate smooth sequence for predictable curves
-preds_x <- seq(min(edna_filtered$MiFish, na.rm = TRUE), max(edna_filtered$MiFish, 
-      na.rm = TRUE), length.out = 100)
-
-# Calculate predictions from both models (using response scale for poisson count data)
-pred_y_model01 <- predict(full_model_filtered, data.frame(MiFish = preds_x, type = "response"))
-
-# Draw curves for the graphs
-lines(preds_x, pred_y_model01, col = "red", lwd = 2)
-
-#Log-log linear regression model creation & visualization
-# Adding 1 to handle any potential zeros and protects against log(0) mathematically undefined errors
 library(ggplot2)
+library(readr)
+library(cowplot) # A reliable alternative to avoid the layout "+" operator error
 
-log_linear_model <- lm(log(mean_trawl_weight + 1) ~ mean_edna_rel_read_count, data = edna_data)
+# ==============================================================================
+# 2. LOAD AND PREPARE DATASETS
+# ==============================================================================
+ceph_data   <- read_csv("relative_reads_cephalopod_trawl_species_trawl_wide.csv")
+fish_data   <- read_csv("relative_reads_fish_trawl_species_trawl_wide.csv")
+invert_data <- read_csv("relative_reads_invertebrate_trawl_species_trawl_wide.csv")
 
-# Display the statistical summary of the model
-cat("--- Log-Linear Model Summary ---\n")
-print(summary(log_linear_model))
+# Filter out 0 values to protect log10 scaling transformations
+ceph_data   <- subset(ceph_data, mean_trawl_weight > 0)
+fish_data   <- subset(fish_data, mean_trawl_weight > 0)
+invert_data <- subset(invert_data, mean_trawl_weight > 0)
 
-# Create the data visualization
-MiFish_log_linear_plot <- ggplot(edna_data, aes(x = mean_edna_rel_read_count, y = mean_trawl_weight)) +
-  geom_point(aes(color = sample_type), size = 3, alpha = 0.8) +    # Plot data points and color code them based on sample type
-  geom_smooth(method = "lm", formula = y ~ log(x + 1), se = TRUE, color = "black", linetype = "dashed") + # Add the log-linear best fit line
-  scale_y_log10() +  # Apply a log-transformation scale to the Y-axis for visualization consistency
-  scale_color_discrete(
+# ==============================================================================
+# 3. GENERATE THE INDIVIDUAL PLOTS
+# ==============================================================================
+
+# Plot 1: Cephalopods
+p1 <- ggplot(ceph_data, aes(x = mean_edna_rel_read_count, y = mean_trawl_weight)) +
+  geom_point(aes(color = sample_type), size = 2.5) +
+  geom_smooth(aes(color = sample_type, fill = sample_type), 
+              method = "lm", linetype = "dashed", alpha = 0.15) +
+  scale_y_log10(labels = scales::label_log()) +
+  labs(
+    title = "Cephalopod Biomass ~ Ceph18s Mean Relative Read counts\nLog-Linear Relationship",
+    x = "Ceph18s Mean Relative Read Counts",
+    y = "Mean Cephalopod Biomass (Log10 Scale)",
+    color = "Collection Method", fill = "Collection Method"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none") # Handled globally by cowplot below
+
+# Plot 2: Invertebrates
+p2 <- ggplot(invert_data, aes(x = mean_edna_rel_read_count, y = mean_trawl_weight)) +
+  geom_point(aes(color = sample_type), size = 2.5) +
+  geom_smooth(aes(color = sample_type, fill = sample_type), 
+              method = "lm", linetype = "dashed", alpha = 0.15) +
+  scale_y_log10(labels = scales::label_log()) +
+  labs(
+    title = "Invertebrate Biomass ~ Leray COI Mean Relative Read counts\nLog-Linear Relationship",
+    x = "Leray COI Mean Relative Read Counts",
+    y = "Mean Invertebrate Biomass (Log10 Scale)"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+# Plot 3: Fish (Keep the legend on this one to extract it clean)
+p3 <- ggplot(fish_data, aes(x = mean_edna_rel_read_count, y = mean_trawl_weight)) +
+  geom_point(aes(color = sample_type), size = 2.5) +
+  geom_smooth(aes(color = sample_type, fill = sample_type), 
+              method = "lm", linetype = "dashed", alpha = 0.15) +
+  scale_y_log10(labels = scales::label_log()) +
+  scale_color_manual(
     name = "Collection Method",
-    breaks = c("Bottom_metaprobe", "Slush", "Top_metaprobe"), # The 'breaks' argument identifies the exact text string currently in your CSV file.
-    labels = c("Bottom Metaprobe", "Slush", "Top Metaprobe")) + # The 'labels' argument replaces them with whatever custom names you want.
-  labs(title = "Fish Biomass ~ MiFish12s Mean Relative Read counts Log-Linear Relationship",
+    values = c("Bottom_metaprobe" = "#F8766D", "Slush" = "#00BA38", "Top_metaprobe" = "#619CFF"),
+    labels = c("Bottom_metaprobe" = "Bottom Metaprobe", "Slush" = "Slush", "Top_metaprobe" = "Top Metaprobe")) +
+  scale_fill_manual(name = "Collection Method", values = c("Bottom_metaprobe" = "#F8766D", "Slush" = "#00BA38", "Top_metaprobe" = "#619CFF"),
+    labels = c("Bottom_metaprobe" = "Bottom Metaprobe", "Slush" = "Slush", "Top_metaprobe" = "Top Metaprobe")) +
+  labs(title = "Fish Biomass ~ MiFish12s Mean Relative Read counts\nLog-Linear Relationship",
     x = "MiFish12s Mean Relative Read Counts",
     y = "Mean Fish Biomass (Log10 Scale)",
-    color = "Sample Type" ) + theme_minimal() + theme(plot.title = element_text(face = "bold", size = 14),
-    axis.title = element_text(face = "bold"))
+    color = "Collection Method", fill = "Collection Method") +
+  theme_minimal() +
+  theme(legend.position = "right")
 
-#Display the plot
-print(MiFish_log_linear_plot)
+# ==============================================================================
+# 4. EXTRACT LEGEND & ASSEMBLE SIDE-BY-SIDE WITHOUT THE "+" ERROR
+# ==============================================================================
+
+# Extract the shared legend structure from plot 3
+shared_legend <- get_legend(p3)
+
+# Remove the legend from plot 3 so it matches the other two plots visually
+p3 <- p3 + theme(legend.position = "none")
+
+# Arrange the three clean charts side-by-side cleanly
+plots_row <- plot_grid(p1, p2, p3, ncol = 3, align = 'h', axis = 'b')
+
+# Append the single clean legend block back to the right margin side
+final_composite_plot <- plot_grid(plots_row, shared_legend, rel_widths = c(3, 0.4))
+
+# Output display and save operations
+print(final_composite_plot)
+ggsave("biomass_read_counts_side_by_side.png", final_composite_plot, width = 22, height = 6, dpi = 300)
 
 
 rm(list = ls())
@@ -106,7 +135,7 @@ edna_data$Temperature <- edna_data$Bottom_Water_Temperature.C..
 
 #Fit data into Poisson Regression GLMs (dropping NA values automatically)
 edna_MiFish_full_model <- glm(Biomass ~ MiFish * Temperature * Mean_Depth,
-                data = edna_data, family = "poisson", na.action = na.omit)
+                              data = edna_data, family = "poisson", na.action = na.omit)
 
 #Perform a backwards selction GLM to eliminate unnecessary cofactors
 edna_MiFish_backward_model <- step(edna_MiFish_full_model, direction = "backward")
@@ -127,7 +156,7 @@ lines(edna_MiFish_full_model, col="purple", lwd=2)
 
 # Generate smooth sequence for predictable curves
 preds_x <- seq(min(edna_data$MiFish, na.rm = TRUE), max(edna_data$MiFish, 
-                                   na.rm = TRUE), length.out = 100)
+                                                        na.rm = TRUE), length.out = 100)
 
 # Create evaluation data frames matching model variables (holding covariates at their mean value)
 new_data_frame <- data.frame(
@@ -175,65 +204,6 @@ print(spearman_result)
 rm(list = ls())
 
 
-#Perform a Poisson Regression GLM using the abundance proportion of Invertebrate species to their read counts across all trawls by each sample type.
-edna_data<- read.csv("relative_reads_invertebrate_trawl_species_trawl_wide.csv", header = TRUE)
-edna_data$Biomass <- round(edna_data$mean_trawl_weight)
-edna_data$Leray <- edna_data$mean_edna_rel_read_count
-
-#Keep ONLY rows from one specific sample type (e.g., Bottom_metaprobe)
-# Makes each species only appears exactly once in the model dataset
-edna_filtered <- subset(edna_data, sample_type == "Top_metaprobe")
-edna_filtered$species <- as.factor(edna_filtered$species)
-
-#Run the Poisson GLM on the single-entry dataset
-full_model_filtered <- glm(Biomass ~ Leray, data = edna_filtered, family = "poisson")
-summary(full_model_filtered)
-
-# Generate the linear scale plot with dynamic model prediction curves
-plot(edna_filtered$Biomass ~ edna_filtered$Leray,
-     xlab = "Leray COI Read Counts", ylab = "Total Biomass", 
-     main = "Invertebrate biomass across all trawls by sample type (Top Metaprobe) ~ Leray COI linear regression model", 
-     ylim = c(0,25))
-abline(full_model_filtered, col="green3", lwd=2)
-
-# Generate smooth sequence for predictable curves
-preds_x <- seq(min(edna_filtered$Leray, na.rm = TRUE), max(edna_filtered$Leray, 
-                                                            na.rm = TRUE), length.out = 100)
-
-# Calculate predictions from both models (using response scale for poisson count data)
-pred_y_model01 <- predict(full_model_filtered, data.frame(Leray = preds_x, type = "response"))
-
-# Draw curves for the graphs
-lines(preds_x, pred_y_model01, col = "red", lwd = 2)
-
-#Log-log linear regression model creation & visualization
-# Adding 1 to handle any potential zeros and protects against log(0) mathematically undefined errors
-library(ggplot2)
-
-Leray_log_linear_model <- lm(log(mean_trawl_weight + 1) ~ mean_edna_rel_read_count, data = edna_data)
-
-# Display the statistical summary of the model
-cat("--- Log-Linear Model Summary ---\n")
-print(summary(Leray_log_linear_model))
-
-# Create the data visualization
-Leray_log_linear_plot <- ggplot(edna_data, aes(x = mean_edna_rel_read_count, y = mean_trawl_weight)) +
-  geom_point(aes(color = sample_type), size = 3, alpha = 0.8) +    # Plot data points and color code them based on sample type
-  geom_smooth(method = "lm", formula = y ~ log(x + 1), se = TRUE, color = "black", linetype = "dashed") + # Add the log-linear best fit line
-  scale_y_log10() +  # Apply a log-transformation scale to the Y-axis for visualization consistency
-  scale_color_discrete(
-    name = "Collection Method",
-    breaks = c("Bottom_metaprobe", "Slush", "Top_metaprobe"), # The 'breaks' argument identifies the exact text string currently in your CSV file.
-    labels = c("Bottom Metaprobe", "Slush", "Top Metaprobe")) + # The 'labels' argument replaces them with whatever custom names you want.
-  labs(title = "Invertebrate Biomass ~ Leray COI Mean Relative Read counts Log-Linear Relationship",
-       x = "Leray COI Mean Relative Read Counts",
-       y = "Mean Invertebrate Biomass (Log10 Scale)",
-       color = "Sample Type" ) + theme_minimal() + theme(plot.title = element_text(face = "bold", size = 14),
-                                                         axis.title = element_text(face = "bold"))
-
-#Display the plot
-print(Leray_log_linear_plot)
-
 
 rm(list = ls())
 
@@ -276,7 +246,7 @@ edna_data$Temperature <- edna_data$Bottom_Water_Temperature.C..
 
 #Fit data into Poisson Regression GLMs (dropping NA values automatically)
 edna_Leray_full_model <- glm(Biomass ~ Leray * Body_Type + Temperature,
-                              data = edna_data, family = "poisson", na.action = na.omit)
+                             data = edna_data, family = "poisson", na.action = na.omit)
 
 #Perform a backwards selction GLM to eliminate unnecessary cofactors
 edna_Leray_backward_model <- step(edna_Leray_full_model, direction = "backward")
@@ -295,7 +265,7 @@ abline(edna_Leray_full_model, col="purple", lwd=2)
 
 # Generate smooth sequence for predictable curves
 preds_x <- seq(min(edna_data$Leray, na.rm = TRUE), max(edna_data$Leray, 
-                                                        na.rm = TRUE), length.out = 100)
+                                                       na.rm = TRUE), length.out = 100)
 
 # Create evaluation data frames matching model variables (holding covariates at their mean value)
 new_data_frame <- data.frame(
@@ -345,66 +315,6 @@ print(spearman_result)
 
 rm(list = ls())
 
-#Perform a Poisson Regression GLM using the abundance proportion of Cephalopod species to their read counts across all trawls by sample type in csv.
-edna_data<- read.csv("relative_reads_cephalopod_trawl_species_trawl_wide.csv", header = TRUE)
-edna_data$Biomass <- round(edna_data$mean_trawl_weight)
-edna_data$Ceph18s <- edna_data$mean_edna_rel_read_count
-
-#Keep ONLY rows from one specific sample type (e.g., Bottom_metaprobe)
-# Makes each species only appears exactly once in the model dataset
-edna_filtered <- subset(edna_data, sample_type == "Top_metaprobe")
-edna_filtered$species <- as.factor(edna_filtered$species)
-
-#Run the Poisson GLM on the single-entry dataset
-full_model_filtered <- glm(Biomass ~ Ceph18s, data = edna_filtered, family = "poisson")
-summary(full_model_filtered)
-
-# Generate the linear scale plot with dynamic model prediction curves
-plot(edna_filtered$Biomass ~ edna_filtered$Ceph18s,
-     xlab = "Ceph18s Read Count", ylab = "Total Biomass", 
-     main = "Cephalopod biomass across all trawls by sample type (Top Metaprobe) ~ Ceph18s linear regression model", 
-     ylim = c(0,25))
-abline(full_model_filtered, col="green3", lwd=2)
-
-# Generate smooth sequence for predictable curves
-preds_x <- seq(min(edna_filtered$Ceph18s, na.rm = TRUE), max(edna_filtered$Ceph18s, 
-                                                            na.rm = TRUE), length.out = 100)
-
-# Calculate predictions from both models (using response scale for poisson count data)
-pred_y_model01 <- predict(full_model_filtered, data.frame(Ceph18s = preds_x, type = "response"))
-
-# Draw curves for the graphs
-lines(preds_x, pred_y_model01, col = "red", lwd = 2)
-
-#Log-log linear regression model creation & visualization
-# Adding 1 to handle any potential zeros and protects against log(0) mathematically undefined errors
-library(ggplot2)
-
-Ceph18s_log_linear_model <- lm(log(mean_trawl_weight + 1) ~ mean_edna_rel_read_count, data = edna_data)
-
-# Display the statistical summary of the model
-cat("--- Log-Linear Model Summary ---\n")
-print(summary(Ceph18s_log_linear_model))
-
-# Create the data visualization
-Ceph18s_log_linear_plot <- ggplot(edna_data, aes(x = mean_edna_rel_read_count, y = mean_trawl_weight)) +
-  geom_point(aes(color = sample_type), size = 3, alpha = 0.8) +    # Plot data points and color code them based on sample type
-  geom_smooth(method = "lm", formula = y ~ log(x + 1), se = TRUE, color = "black", linetype = "dashed") + # Add the log-linear best fit line
-  scale_y_log10() +  # Apply a log-transformation scale to the Y-axis for visualization consistency
-  scale_color_discrete(
-    name = "Collection Method",
-    breaks = c("Bottom_metaprobe", "Slush", "Top_metaprobe"), # The 'breaks' argument identifies the exact text string currently in your CSV file.
-    labels = c("Bottom Metaprobe", "Slush", "Top Metaprobe")) + # The 'labels' argument replaces them with whatever custom names you want.
-  labs(title = "Cephalopod Biomass ~ Ceph18s Mean Relative Read counts Log-Linear Relationship",
-       x = "Ceph18s Mean Relative Read Counts",
-       y = "Mean Cephalopod Biomass (Log10 Scale)",
-       color = "Sample Type" ) + theme_minimal() + theme(plot.title = element_text(face = "bold", size = 14),
-                                                         axis.title = element_text(face = "bold"))
-
-#Display the plot
-print(Ceph18s_log_linear_plot)
-
-
 rm(list = ls())
 
 #Perform a Pearson & Spearman Statistic test for each sample type
@@ -445,7 +355,7 @@ edna_data$Temperature <- edna_data$Bottom_Water_Temperature.C..
 
 #Fit data into Poisson Regression GLMs (dropping NA values automatically)
 edna_Ceph18s_full_model <- glm(Biomass ~ Ceph18s * Temperature * Mean_Depth,
-                              data = edna_data, family = "poisson", na.action = na.omit)
+                               data = edna_data, family = "poisson", na.action = na.omit)
 
 #Perform a backwards selction GLM to eliminate unnecessary cofactors
 edna_Ceph18s_backward_model <- step(edna_Ceph18s_full_model, direction = "backward")
@@ -466,7 +376,7 @@ lines(edna_Ceph18s_full_model, col="purple", lwd=2)
 
 # Generate smooth sequence for predictable curves
 preds_x <- seq(min(edna_data$Ceph18s, na.rm = TRUE), max(edna_data$Ceph18s, 
-                                                        na.rm = TRUE), length.out = 100)
+                                                         na.rm = TRUE), length.out = 100)
 
 # Create evaluation data frames matching model variables (holding covariates at their mean value)
 new_data_frame <- data.frame(
