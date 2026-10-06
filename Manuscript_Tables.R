@@ -62,3 +62,22 @@ table_grob<- ttheme_default(core = list(fg_params = list(col = "grey")),
                             colhead = list(fg_params = list(col = "blue")))
 
 grid.draw(species_table)
+
+
+#Clear current working environment
+rm(list = ls())
+
+
+# Use data from csv file to create tables
+statistic_ranking_table <- read.csv("Biomass_eDNA_Statistics_Station.csv", header = TRUE, sep = ",")
+
+# Replace underscores with spaces in the column headers
+colnames(statistic_ranking_table) <- gsub("_", " ", colnames(statistic_ranking_table))
+
+#Create Table, Customize, and View it
+trawl_statistics <- tableGrob(statistic_ranking_table)
+
+table_grob<- ttheme_default(core = list(fg_params = list(col = "grey")),
+                            colhead = list(fg_params = list(col = "blue")))
+
+grid.draw(trawl_statistics)
