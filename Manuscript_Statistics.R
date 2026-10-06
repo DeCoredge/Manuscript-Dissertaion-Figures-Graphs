@@ -13,10 +13,6 @@ ceph_data   <- read_csv("relative_reads_cephalopod_trawl_species_trawl_wide.csv"
 fish_data   <- read_csv("relative_reads_fish_trawl_species_trawl_wide.csv")
 invert_data <- read_csv("relative_reads_invertebrate_trawl_species_trawl_wide.csv")
 
-# Filter out 0 values to protect log10 scaling transformations
-ceph_data   <- subset(ceph_data, mean_trawl_weight > 0)
-fish_data   <- subset(fish_data, mean_trawl_weight > 0)
-invert_data <- subset(invert_data, mean_trawl_weight > 0)
 
 # ==============================================================================
 # 3. GENERATE THE INDIVIDUAL PLOTS
@@ -32,7 +28,7 @@ p1 <- ggplot(ceph_data, aes(x = mean_edna_rel_read_count, y = mean_trawl_weight)
     title = "Cephalopod Biomass ~ Ceph18s Mean Relative Read counts\nLog-Linear Relationship",
     x = "Ceph18s Mean Relative Read Counts",
     y = "Mean Cephalopod Biomass (Log10 Scale)",
-    color = "Collection Method", fill = "Collection Method"
+    color = "eDNA Collection Method Across All Trawls (Wide)", fill = "eDNA Collection Method Across all Trawls (Wide)"
   ) +
   theme_minimal() +
   theme(legend.position = "none") # Handled globally by cowplot below
@@ -58,15 +54,15 @@ p3 <- ggplot(fish_data, aes(x = mean_edna_rel_read_count, y = mean_trawl_weight)
               method = "lm", linetype = "dashed", alpha = 0.15) +
   scale_y_log10(labels = scales::label_log()) +
   scale_color_manual(
-    name = "Collection Method",
+    name = "eDNA Collection Method Across All Trawls (Wide)",
     values = c("Bottom_metaprobe" = "#F8766D", "Slush" = "#00BA38", "Top_metaprobe" = "#619CFF"),
     labels = c("Bottom_metaprobe" = "Bottom Metaprobe", "Slush" = "Slush", "Top_metaprobe" = "Top Metaprobe")) +
-  scale_fill_manual(name = "Collection Method", values = c("Bottom_metaprobe" = "#F8766D", "Slush" = "#00BA38", "Top_metaprobe" = "#619CFF"),
+  scale_fill_manual(name = "eDNA Collection Method Across All Trawls (Wide)", values = c("Bottom_metaprobe" = "#F8766D", "Slush" = "#00BA38", "Top_metaprobe" = "#619CFF"),
     labels = c("Bottom_metaprobe" = "Bottom Metaprobe", "Slush" = "Slush", "Top_metaprobe" = "Top Metaprobe")) +
   labs(title = "Fish Biomass ~ MiFish12s Mean Relative Read counts\nLog-Linear Relationship",
     x = "MiFish12s Mean Relative Read Counts",
     y = "Mean Fish Biomass (Log10 Scale)",
-    color = "Collection Method", fill = "Collection Method") +
+    color = "eDNA Collection Method Across All Trawls (Wide)", fill = "eDNA Collection Method Across All Trawls (Wide)") +
   theme_minimal() +
   theme(legend.position = "right")
 
