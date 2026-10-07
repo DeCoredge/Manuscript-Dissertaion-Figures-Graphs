@@ -1,4 +1,7 @@
 rm(list = ls())
+
+setwd("C:/Users/DeCorey Bolton Jr/Documents/GitHub/Manuscript-Dissertaion-Figures-Graphs")
+
 library(readr)
 
 data <- read_csv("DMR_Inshore_Trawl_eDNA_concentration_metadata.csv")
