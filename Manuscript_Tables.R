@@ -91,5 +91,22 @@ table_grob <- ttheme_default(
 # Pass the custom theme to your tableGrob
 trawl_statistics <- tableGrob(statistic_ranking_table, theme = table_grob)
 
+# --- ADD THESE LINES FOR THE LEGEND ---
+
+# 1. Create a text box for the legend
+legend_text <- textGrob(
+  label = "*p < 0.05, **p < 0.005, ***p < 0.0005",
+  x = unit(0.05, "npc"),              # Aligns text to the left side of the table
+  just = "left",                       # Left-justifies the text alignment
+  gp = gpar(fontface = "italic", cex = 0.8) # Optional: makes text small and italic
+)
+
+# 2. Use grid.arrange to stack the table and the legend vertically
+grid.arrange(
+  trawl_statistics, 
+  legend_text, 
+  ncol = 1,                            # Arrange items in a single column
+  heights = unit.c(unit(1, "null"), unit(1, "line")) # Gives table main space, legend 1 line space
+)
 
 grid.draw(trawl_statistics)
