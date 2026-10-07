@@ -22,7 +22,7 @@ library(ggOceanMaps)
 library(ggmap)
 library(marmap)
 library(ggnewscale)
-
+library(ggpubr)
 
 # Use csv file to upload coordinates of sampling locations from trawls
 trawl_data <- read.csv("DMR_Inshore_Sample_Sites_Map.csv")
