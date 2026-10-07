@@ -75,15 +75,21 @@ rm(list = ls())
 
 
 # Use data from csv file to create tables
-statistic_ranking_table <- read.csv("Biomass_eDNA_Statistics_Station.csv", header = TRUE, sep = ",")
+statistic_ranking_table <- read.csv("Biomass_eDNA_Statistics_Station.csv", header = TRUE,  sep = ",", check.names = FALSE)
 
-# Replace underscores with spaces in the column headers
-colnames(statistic_ranking_table) <- gsub("_", " ", colnames(statistic_ranking_table))
+# Convert the raw symbol '⍴' to the word 'rho' so tableGrob's math engine can read it
+colnames(statistic_ranking_table) <- gsub("⍴", "rho", colnames(statistic_ranking_table))
 
-#Create Table, Customize, and View it
-trawl_statistics <- tableGrob(statistic_ranking_table)
 
-table_grob<- ttheme_default(core = list(fg_params = list(col = "grey")),
-                            colhead = list(fg_params = list(col = "blue")))
+# Create Custom Theme and turn on 'parse = TRUE' to process mathematical expressions
+table_grob <- ttheme_default(
+  core = list(fg_params = list(col = "black")),
+  colhead = list(fg_params = list(col = "blue2")),
+  parse = TRUE #<-- IMPORTANT: Tells R to translate "rho" into the Greek letter 
+)
+
+# Pass the custom theme to your tableGrob
+trawl_statistics <- tableGrob(statistic_ranking_table, theme = table_grob)
+
 
 grid.draw(trawl_statistics)
