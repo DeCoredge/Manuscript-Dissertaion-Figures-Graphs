@@ -53,12 +53,15 @@ base_map <- ggplot() +
                        name = "Depth (m)") +
   geom_sf(data = world, fill = "#EADEC9", color = "black") + # Add coastline
   geom_contour(data = gom_bathy_df, aes(x = x, y = y, z = z), breaks = c(0, -100, -200), color = "darkgray", linetype = "dashed") + # Add bathymetric contours
-  new_scale_fill() + geom_jitter(data = trawl_data, # CHANGED: Replaced geom_point with geom_jitter to shift overlapping sites horizontally
-      aes(x = Start_Longitude, y = Start_Latitude, fill = Season),
-   shape = 21, color = "black", size = 3.5, stroke = 1.2,
-              width = 0.095, height = 0) +
+  new_scale_fill() + # CHANGED: Added shape = factor(Region) inside aes() and removed hardcoded shape = 21
+  geom_jitter(data = trawl_data, 
+  aes(x = Start_Longitude, y = Start_Latitude, fill = Season, shape = factor(Region)),
+  color = "black", size = 3.5, stroke = 1.2, width = 0.099, height = 0) +
   scale_fill_manual(values = c("Fall" = "orange", "Spring" = "lightgrey"), # Colorblind-friendly options and 77 at the end = ~46% transparent
              name = "Trawl Season") +
+  # NEW: Legend for Region (Shapes 21-25 allow both border outlines and fills)
+  scale_shape_manual(values = c("2" = 21, "5" = 24), 
+                     name = "Survey Region") + guides(fill = guide_legend(override.aes = list(shape = 21, color = "black"))) + #ADD THIS LINE TO FIX THE LEGEND COLORS
   coord_sf(xlim = c(lon1, lon2), ylim = c(lat1, lat2), expand = FALSE) +
   labs(title = "Paired eDNA ~ ME-NH Inshore Trawl Sample Sites",
        x = "Longitude",
