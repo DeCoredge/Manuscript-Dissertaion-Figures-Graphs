@@ -23,21 +23,22 @@ library(ggmap)
 library(marmap)
 library(ggnewscale)
 
-#Use csv file to upload coordinates of sampling locations from trawls
+
+# Use csv file to upload coordinates of sampling locations from trawls
 trawl_data <- read.csv("DMR_Inshore_Sample_Sites_Map.csv")
 
 # FIX: Invert longitude values to be negative so they plot in the Western Hemisphere
 trawl_data$Start_Longitude <- trawl_data$Start_Longitude * -1
 
-#Define the boundaries of the Gulf of Maine
+# Define the boundaries of the Gulf of Maine
 lon1 <- -71.1 # Min. Longitude
 lon2 <- -62.28 # Max. Longitude
 lat1 <- 39.65 # Min. Latitude
 lat2 <- 46.02 # Max. Latitude
 
-#Get bathymetric data of Gulf of Maine 
-gom_bathy <- getNOAA.bathy(lon1 = -71.1, lon2 = -62.28, lat1 = 39.65, 
-                           lat2 = 46.02, resolution = 1, keep = TRUE)
+# Get bathymetric data of Gulf of Maine 
+gom_bathy <- getNOAA.bathy(lon1 = lon1, lon2 = lon2, lat1 = lat1, 
+                           lat2 = lat2, resolution = 1, keep = TRUE)
 
 # Convert bathymetric data to a dataframe to plot
 gom_bathy_df <- fortify(gom_bathy)
@@ -45,36 +46,57 @@ gom_bathy_df <- fortify(gom_bathy)
 # Get coastline data
 world <- ne_countries(scale = "medium", returnclass = "sf")
 
-#Plot the map
+# Prepare data frame for plotting adjustments
+trawl_data_plot <- trawl_data
+r5_indices <- which(trawl_data_plot$Region == 5)
+
+# Scale Region 5 points so the western limit is exactly -67.43 and the eastern limit is exactly -67.0
+r5_points <- trawl_data_plot$Start_Longitude[r5_indices]
+min_orig <- min(r5_points)
+max_orig <- max(r5_points)
+
+# Shifted baseline to -67.43
+trawl_data_plot$Start_Longitude[r5_indices] <- -67.43 + ((r5_points - min_orig) / (max_orig - min_orig)) * (-67.00 - (-67.43))
+
+# Plot the map
 base_map <- ggplot() +
   geom_raster(data = gom_bathy_df, aes(x = x, y = y, fill = z)) +
-  scale_fill_gradientn(colors = c( "darkblue", "blue", "skyblue"), limits = c(-1000, 0),
+  scale_fill_gradientn(colors = c("darkblue", "blue", "skyblue"), limits = c(-1000, 0),
                        oob = scales::squish,
                        name = "Depth (m)") +
   geom_sf(data = world, fill = "#EADEC9", color = "black") + # Add coastline
-  geom_contour(data = gom_bathy_df, aes(x = x, y = y, z = z), breaks = c(0, -100, -200), color = "darkgray", linetype = "dashed") + # Add bathymetric contours
-  new_scale_fill() + # CHANGED: Added shape = factor(Region) inside aes() and removed hardcoded shape = 21
-  geom_jitter(data = trawl_data, 
-  aes(x = Start_Longitude, y = Start_Latitude, fill = Season, shape = factor(Region)),
-  color = "black", size = 3.5, stroke = 1.2, width = 0.099, height = 0) +
-  scale_fill_manual(values = c("Fall" = "orange", "Spring" = "lightgrey"), # Colorblind-friendly options and 77 at the end = ~46% transparent
-             name = "Trawl Season") +
-  # NEW: Legend for Region (Shapes 21-25 allow both border outlines and fills)
-  scale_shape_manual(values = c("2" = 21, "5" = 24), 
-                     name = "Gulf of Maine Region") + guides(fill = guide_legend(override.aes = list(shape = 21, color = "black"))) + #ADD THIS LINE TO FIX THE LEGEND COLORS
-  coord_sf(xlim = c(lon1, lon2), ylim = c(lat1, lat2), expand = FALSE) +
+  geom_contour(data = gom_bathy_df, aes(x = x, y = y, z = z), 
+               breaks = c(0, -100, -200), color = "darkgray", linetype = "dashed") + 
+  
+  # Visual boundary lines partitioning the 5 regions over the ocean
+  geom_vline(xintercept = c(-70.18, -69.25, -68.32, -67.45), 
+             color = "black", linetype = "dotted", linewidth = 0.8) +
+  annotate("text", x = c(-70.35, -69.7, -68.8, -67.9, -67.2), y = 43.3, 
+           label = c("Reg 1", "Reg 2", "Reg 3", "Reg 4", "Reg 5"), 
+           color = "white", fontface = "bold", size = 3.5) +
+  
+  new_scale_fill() + 
+  
+  # FIXED: Maximized horizontal and vertical jitter settings
+  geom_jitter(data = trawl_data_plot, 
+              aes(x = Start_Longitude, y = Start_Latitude, fill = Season, shape = factor(Region)),
+              color = "black", size = 3.5, stroke = 1.2,
+              position = position_jitter(width = 0.11, height = 0.06, seed = 123)) +
+  
+  # Added override.aes so legend dots are fillable circles matching the map points
+  scale_fill_manual(values = c("Fall" = "orange", "Spring" = "lightgrey"), 
+                    name = "Trawl Season",
+                    guide = guide_legend(override.aes = list(shape = 21))) +
+  
+  # Region 2 is mapped to shape 21 (circle). The legend dynamically updates.
+  scale_shape_manual(values = c("1" = 21, "2" = 21, "3" = 23, "4" = 24, "5" = 25),
+                     name = "Gulf of Maine Region") +
+  
+  # Crops map precisely to your study area limits matching the image
+  coord_sf(xlim = c(-70.5, -66.5), ylim = c(43.2, 44.8), expand = FALSE) +
   labs(title = "Paired eDNA ~ ME-NH Inshore Trawl Sample Sites",
-       x = "Longitude",
-       y = "Latitude") +
-  theme_minimal()
+       x = "Longitude", y = "Latitude") +
+  theme_bw()
 
-base_map # check to make sure that the base map looks alright
-
-
-#Plot the points on the map w/ the scale of the map fixed to have the coordinate points more visible
-base_map_zoomed <- base_map +
-  coord_sf(xlim = c(-70.5, -67), ylim = c(43.2, 44.8), expand = FALSE)
-
-#View New zoomed in Map
-base_map_zoomed
-print(base_map_zoomed)
+# View the map
+print(base_map)
