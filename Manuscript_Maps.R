@@ -1,3 +1,50 @@
+#Sample Site Map making for Manuscript & Dissertation
+
+#Clear current working environment
+rm(list = ls())
+
+setwd("C:/Users/DeCorey Bolton Jr/Documents/GitHub/Manuscript-Dissertaion-Figures-Graphs")
+
+#Install Packages needed to make U.S. State Maps & Oceans
+install.packages(c("sf", "ggplot2", "usmap"))
+install.packages("rnaturalearth")
+install.packages("rnaturalearthdata")
+install.packages("ggOceanMaps")
+install.packages("ggmap")
+install.packages("marmap")
+install.packages("ggnewscale")
+library(sf)
+library(ggplot2)
+library(usmap)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(ggOceanMaps)
+library(ggmap)
+library(marmap)
+library(ggnewscale)
+
+#Use csv file to upload coordinates of sampling locations from trawls
+trawl_data <- read.csv("DMR_Inshore_Sample_Sites_Map.csv")
+
+# FIX: Invert longitude values to be negative so they plot in the Western Hemisphere
+trawl_data$Start_Longitude <- trawl_data$Start_Longitude * -1
+
+#Define the boundaries of the Gulf of Maine
+lon1 <- -71.1 # Min. Longitude
+lon2 <- -62.28 # Max. Longitude
+lat1 <- 39.65 # Min. Latitude
+lat2 <- 46.02 # Max. Latitude
+
+#Get bathymetric data of Gulf of Maine 
+gom_bathy <- getNOAA.bathy(lon1 = -71.1, lon2 = -62.28, lat1 = 39.65, 
+                           lat2 = 46.02, resolution = 1, keep = TRUE)
+
+# Convert bathymetric data to a dataframe to plot
+gom_bathy_df <- fortify(gom_bathy)
+
+# Get coastline data
+world <- ne_countries(scale = "medium", returnclass = "sf")
+
 #Plot the map
 base_map <- ggplot() +
   geom_raster(data = gom_bathy_df, aes(x = x, y = y, fill = z)) +
