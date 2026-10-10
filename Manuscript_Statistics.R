@@ -58,16 +58,84 @@ p3 <- ggplot(fish_data, aes(x = mean_edna_rel_read_count, y = mean_trawl_weight)
     values = c("Bottom_metaprobe" = "#F8766D", "Slush" = "#00BA38", "Top_metaprobe" = "#619CFF"),
     labels = c("Bottom_metaprobe" = "Bottom Metaprobe", "Slush" = "Slush", "Top_metaprobe" = "Top Metaprobe")) +
   scale_fill_manual(name = "eDNA Collection Method Across All Trawls (Wide)", values = c("Bottom_metaprobe" = "#F8766D", "Slush" = "#00BA38", "Top_metaprobe" = "#619CFF"),
-    labels = c("Bottom_metaprobe" = "Bottom Metaprobe", "Slush" = "Slush", "Top_metaprobe" = "Top Metaprobe")) +
+                    labels = c("Bottom_metaprobe" = "Bottom Metaprobe", "Slush" = "Slush", "Top_metaprobe" = "Top Metaprobe")) +
   labs(title = "Fish Biomass ~ MiFish12s Mean Relative Read counts\nLog-Linear Relationship",
-    x = "MiFish12s Mean Relative Read Counts",
-    y = "Mean Fish Biomass (Log10 Scale)",
-    color = "eDNA Collection Method Across All Trawls (Wide)", fill = "eDNA Collection Method Across All Trawls (Wide)") +
+       x = "MiFish12s Mean Relative Read Counts",
+       y = "Mean Fish Biomass (Log10 Scale)",
+       color = "eDNA Collection Method Across All Trawls (Wide)", fill = "eDNA Collection Method Across All Trawls (Wide)") +
   theme_minimal() +
   theme(legend.position = "right")
 
+
 # ==============================================================================
-# 4. EXTRACT LEGEND & ASSEMBLE SIDE-BY-SIDE WITHOUT THE "+" ERROR
+# 4. REGULAR LINEAR MODELING (lm) WITH TRANSFORMS
+# ==============================================================================
+
+# We apply an arcsine square-root transformation to the response variable proportions 
+# to better satisfy ordinary least squares assumptions (normality and variance).
+# If your proportions contain exact 0s, a tiny offset can be added, e.g., log10(x + 0.0001).
+
+# --- FISH LINEAR MODELS ---
+fish_lm_reduced <- lm(asin(sqrt(mean_edna_rel_read_count)) ~ log10(mean_trawl_weight), 
+                      data = fish_data)
+fish_lm_full    <- lm(asin(sqrt(mean_edna_rel_read_count)) ~ log10(mean_trawl_weight) + sample_type, 
+                      data = fish_data)
+# Compare nested Gaussian models using an F-test
+lrt_fish_lm     <- anova(fish_lm_reduced, fish_lm_full)
+
+# --- INVERTEBRATE LINEAR MODELS ---
+invert_lm_reduced <- lm(asin(sqrt(mean_edna_rel_read_count)) ~ log10(mean_trawl_weight), 
+                        data = invert_data)
+invert_lm_full    <- lm(asin(sqrt(mean_edna_rel_read_count)) ~ log10(mean_trawl_weight) + sample_type, 
+                        data = invert_data)
+lrt_invert_lm     <- anova(invert_lm_reduced, invert_lm_full)
+
+# --- CEPHALOPOD LINEAR MODELS ---
+ceph_lm_reduced <- lm(asin(sqrt(mean_edna_rel_read_count)) ~ log10(mean_trawl_weight), 
+                      data = ceph_data)
+ceph_lm_full    <- lm(asin(sqrt(mean_edna_rel_read_count)) ~ log10(mean_trawl_weight) + sample_type, 
+                      data = ceph_data)
+lrt_ceph_lm     <- anova(ceph_lm_reduced, ceph_lm_full)
+
+
+# ==============================================================================
+# 5. PRINT LINEAR ANOVA OUTPUTS
+# ==============================================================================
+cat("\n==================================================\n")
+cat("NESTED F-TEST: FISH (Proportion Scale via lm)\n")
+cat("==================================================\n")
+print(lrt_fish_lm)
+
+cat("\n==================================================\n")
+cat("NESTED F-TEST: INVERTEBRATES (Proportion Scale via lm)\n")
+cat("==================================================\n")
+print(lrt_invert_lm)
+
+cat("\n==================================================\n")
+cat("NESTED F-TEST: CEPHALOPODS (Proportion Scale via lm)\n")
+cat("==================================================\n")
+print(lrt_ceph_lm)
+
+# Interaction Model: Tests if the predictive power changes by collection type
+fish_interaction <- lm(asin(sqrt(mean_edna_rel_read_count)) ~ log10(mean_trawl_weight) * sample_type, data = fish_data)
+
+summary(fish_interaction)
+
+
+# 1. Fit the reduced linear model (without collection method)
+fish_lm_reduced <- lm(asin(sqrt(mean_edna_rel_read_count)) ~ log10(mean_trawl_weight), 
+                      data = fish_data)
+
+# 2. Fit the full interaction linear model (with collection method and its interaction)
+fish_interaction <- lm(asin(sqrt(mean_edna_rel_read_count)) ~ log10(mean_trawl_weight) * sample_type, 
+                       data = fish_data)
+
+# 3. Perform the formal nested ANOVA F-test
+nested_f_test <- anova(fish_lm_reduced, fish_interaction)
+print(nested_f_test)
+
+# ==============================================================================
+# 6. EXTRACT LEGEND & ASSEMBLE SIDE-BY-SIDE WITHOUT THE "+" ERROR
 # ==============================================================================
 
 # Extract the shared legend structure from plot 3
