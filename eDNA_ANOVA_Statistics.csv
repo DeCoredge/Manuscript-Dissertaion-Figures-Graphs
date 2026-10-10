@@ -1,0 +1,5 @@
+Tukey post-hoc test,,,,
+Sample Type,Estimated Difference,Lower Bound,Upper Bound,Adjusted p-value
+Top Metaprobe ~ Bottom Metaprobe,-0.439,-4.108,3.23,0.953
+Slush ~ Bottom Metaprobe,8.97,5.302,12.64,***5.3 x 10⁻⁶
+Slush ~ Top Metaprobe,9.41,5.74,13.08,***2.4 x 10⁻⁶

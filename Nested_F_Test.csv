@@ -1,0 +1,7 @@
+Taxonomic Group (Marker Locus),Model Structure,Res. Df,RSS,Df, Sum of SQ,F-value,Pr(>F)
+Fish (MiFish12S),Reduced (Biomass Only),69,0.804,NA,NA,NA,NA
+,Full (Biomass x eDNA Collection Method),65,0.771,2,0.034,1.467,0.238 (ns)
+Invertebrate (LerayCOI),Reduced (Biomass Only),42,0.005,NA,NA,NA,NA
+,Full (Biomass x eDNA Collection Method),40,0.005,2,0.0001,0.476,0.625 (ns)
+Cephalopod (Ceph18S),Reduced (Biomass Only),4,0.121,NA,NA,NA,NA
+,Full (Biomass x eDNA Collection Method),2,0.029,2,0.092,3.1498,0.241 (ns)
