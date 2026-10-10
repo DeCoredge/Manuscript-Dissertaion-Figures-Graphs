@@ -151,3 +151,25 @@ grid.arrange(
 )
 
 grid.draw(trawl_statistics)
+
+#Clear current working environment
+rm(list = ls())
+
+
+# Use data from csv file to create tables
+nested_f_test_table <- read.csv("Nested_F_Test.csv", header = TRUE, sep = ",", check.names = FALSE)
+
+#Replace N/A in table
+nested_f_test_table <- replace(nested_f_test_table, is.na(nested_f_test_table), "")
+
+# 2. Clean up underscores (this will now preserve your hyphens and parentheses)
+colnames(nested_f_test_table) <- gsub("_", " ", colnames(nested_f_test_table))
+nested_f_test_table[] <- lapply(nested_f_test_table, function(x) gsub("_", " ", x))
+
+#Create Table, Customize, and View it
+nested_f_test <- tableGrob(nested_f_test_table)
+
+table_grob<- ttheme_default(core = list(fg_params = list(col = "grey")),
+                            colhead = list(fg_params = list(col = "blue")))
+
+grid.draw(nested_f_test)
